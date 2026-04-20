@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, LogOut, Menu, X, MessageCircle, Hash } from "lucide-react";
+import {
+  Send,
+  LogOut,
+  Menu,
+  X,
+  MessageCircle,
+  Hash,
+  Pencil,
+  Trash2,
+  Check,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 interface Message {
@@ -74,7 +84,6 @@ function Avatar({
 }) {
   const style = { width: size, height: size, flexShrink: 0 as const };
   const { bg, text } = getAvatarColor(username);
-
   if (avatar_url) {
     return (
       <img
@@ -123,11 +132,11 @@ export default function ChatPage() {
     username: string;
     avatar_url: string;
   } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
 
-  const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // ✅ FIX: Simpan typing channel di ref agar bisa diakses di handleTyping
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
     null,
   );
@@ -140,7 +149,6 @@ export default function ChatPage() {
           "id, content, user_id, created_at, profiles(username, avatar_url)",
         )
         .order("created_at", { ascending: true });
-
       if (msgs) {
         setMessages(
           msgs.map((m: any) => ({
@@ -157,10 +165,6 @@ export default function ChatPage() {
       console.error("Error fetching messages:", error);
     }
   }, []);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingUsers]);
 
   useEffect(() => {
     let msgChannel: ReturnType<typeof supabase.channel>;
@@ -203,7 +207,6 @@ export default function ChatPage() {
               .select("username, avatar_url")
               .eq("id", payload.new.user_id)
               .single();
-
             setMessages((prev) => [
               ...prev,
               {
@@ -214,30 +217,44 @@ export default function ChatPage() {
             ]);
           },
         )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "messages" },
+          (payload) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === payload.new.id
+                  ? { ...m, content: payload.new.content }
+                  : m,
+              ),
+            );
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "messages" },
+          (payload) => {
+            setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+          },
+        )
         .subscribe();
 
-      // ✅ FIX: Buat channel presence dengan config yang benar
       typingChannel = supabase.channel("typing-room", {
         config: {
           presence: { key: user.id },
         },
       });
-
-      // ✅ FIX: Simpan ke ref agar bisa dipakai di handleTyping
       typingChannelRef.current = typingChannel;
 
-      // ✅ Helper untuk mengambil semua presence state terbaru
       const syncPresenceState = () => {
         const state = typingChannel.presenceState();
         const all = Object.values(state).flat() as any[];
-
         setOnlineUsers(
           all.map((u) => ({
             username: u.username,
             avatar_url: u.avatar_url || "",
           })),
         );
-
         setTypingUsers(
           all
             .filter((u) => u.isTyping && u.username !== me.username)
@@ -250,21 +267,11 @@ export default function ChatPage() {
       };
 
       typingChannel
-        // ✅ FIX: sync dipanggil setiap ada perubahan state (join/leave/update)
-        .on("presence", { event: "sync" }, () => {
-          syncPresenceState();
-        })
-        // ✅ FIX: Tambahkan listener join agar sidebar langsung update saat user baru masuk
-        .on("presence", { event: "join" }, () => {
-          syncPresenceState();
-        })
-        // ✅ FIX: Tambahkan listener leave agar sidebar langsung update saat user keluar
-        .on("presence", { event: "leave" }, () => {
-          syncPresenceState();
-        })
+        .on("presence", { event: "sync" }, syncPresenceState)
+        .on("presence", { event: "join" }, syncPresenceState)
+        .on("presence", { event: "leave" }, syncPresenceState)
         .subscribe(async (status) => {
           if (status === "SUBSCRIBED") {
-            // ✅ Track diri sendiri setelah berhasil subscribe
             await typingChannel.track({
               username: me.username,
               avatar_url: me.avatar_url,
@@ -294,16 +301,37 @@ export default function ChatPage() {
       .insert({ content, user_id: currentUser.id });
   }
 
-  // ✅ FIX: Gunakan typingChannelRef.current, bukan membuat channel baru
+  async function handleDelete(id: string) {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    await supabase.from("messages").delete().eq("id", id);
+  }
+
+  async function handleEditSave(id: string) {
+    if (!editText.trim()) return;
+    const newContent = editText.trim();
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)),
+    );
+    setEditingId(null);
+    setEditText("");
+    await supabase
+      .from("messages")
+      .update({ content: newContent })
+      .eq("id", id);
+  }
+
+  function handleEditCancel() {
+    setEditingId(null);
+    setEditText("");
+  }
+
   async function handleTyping() {
     if (!currentUser || !typingChannelRef.current) return;
-
     await typingChannelRef.current.track({
       username: currentUser.username,
       avatar_url: currentUser.avatar_url,
       isTyping: true,
     });
-
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(async () => {
       if (!typingChannelRef.current || !currentUser) return;
@@ -378,6 +406,21 @@ export default function ChatPage() {
         .nav-btn:hover { background: #f3f4f6; }
         .send-btn:hover { opacity: 0.85; }
         .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .msg-actions { opacity: 0; transition: opacity 0.15s; }
+        .msg-wrapper:hover .msg-actions { opacity: 1; }
+        .action-btn {
+          background: #ffffff;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          padding: 4px 6px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.1s;
+        }
+        .action-btn:hover { background: #f3f4f6; }
+        .action-btn.del:hover { background: #fee2e2; border-color: #fca5a5; }
       `}</style>
 
       {/* Header */}
@@ -408,7 +451,6 @@ export default function ChatPage() {
             </span>
           </div>
         </div>
-
         <div className="flex items-center gap-1">
           <a
             href="/profile"
@@ -484,7 +526,6 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Online Users List */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-4 pt-4 pb-2">
               <div className="flex items-center gap-2 mb-3">
@@ -493,13 +534,11 @@ export default function ChatPage() {
                   Online — {onlineUsers.length}
                 </p>
               </div>
-
               {onlineUsers.length === 0 && (
                 <p className="text-xs text-gray-400 px-1">
                   Belum ada yang online
                 </p>
               )}
-
               {onlineUsers.map((onlineUser) => {
                 const isTyping = typingUsers.some(
                   (t) => t.username === onlineUser.username,
@@ -543,7 +582,6 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Current User Footer */}
           <div
             className="p-3 flex-shrink-0"
             style={{ borderTop: "1px solid #f3f4f6" }}
@@ -602,10 +640,14 @@ export default function ChatPage() {
           >
             {messages.map((msg) => {
               const isMe = msg.user_id === currentUser.id;
+              const isEditing = editingId === msg.id;
+
               return (
                 <div
                   key={msg.id}
-                  className={`msg-anim flex items-end gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                  className={`msg-anim msg-wrapper flex items-end gap-2.5 ${
+                    isMe ? "flex-row-reverse" : "flex-row"
+                  }`}
                 >
                   {!isMe && (
                     <div className="flex-shrink-0">
@@ -616,30 +658,130 @@ export default function ChatPage() {
                       />
                     </div>
                   )}
+
                   <div
-                    className={`flex flex-col max-w-xs md:max-w-md lg:max-w-lg ${isMe ? "items-end" : "items-start"}`}
+                    className={`flex flex-col max-w-xs md:max-w-md lg:max-w-lg ${
+                      isMe ? "items-end" : "items-start"
+                    }`}
                   >
                     {!isMe && (
                       <span className="text-xs font-medium text-gray-500 mb-1 ml-1">
                         {msg.username}
                       </span>
                     )}
-                    <div
-                      className="px-4 py-2.5 text-sm leading-relaxed"
-                      style={{
-                        background: isMe ? "#111111" : "#ffffff",
-                        color: isMe ? "#ffffff" : "#111111",
-                        border: isMe ? "none" : "1px solid #e5e7eb",
-                        borderRadius: isMe
-                          ? "18px 18px 4px 18px"
-                          : "18px 18px 18px 4px",
-                        wordBreak: "break-word",
-                        maxWidth: "100%",
-                        boxShadow: isMe ? "none" : "0 1px 2px rgba(0,0,0,0.05)",
-                      }}
-                    >
-                      {msg.content}
-                    </div>
+
+                    {isEditing ? (
+                      <div
+                        className="flex flex-col gap-2 p-3 rounded-2xl"
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e5e7eb",
+                          minWidth: "200px",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleEditSave(msg.id);
+                            }
+                            if (e.key === "Escape") handleEditCancel();
+                          }}
+                          className="text-sm resize-none outline-none bg-transparent w-full"
+                          style={{
+                            color: "#111",
+                            minHeight: "60px",
+                            maxHeight: "120px",
+                          }}
+                        />
+                        <div className="flex items-center gap-2 justify-end">
+                          <button
+                            onClick={handleEditCancel}
+                            style={{
+                              background: "transparent",
+                              color: "#6b7280",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "6px",
+                              padding: "4px 10px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Batal
+                          </button>
+                          <button
+                            onClick={() => handleEditSave(msg.id)}
+                            style={{
+                              background: "#111",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "4px 10px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Check size={12} />
+                            Simpan
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={`flex items-end gap-1.5 ${
+                          isMe ? "flex-row-reverse" : "flex-row"
+                        }`}
+                      >
+                        <div
+                          className="px-4 py-2.5 text-sm leading-relaxed"
+                          style={{
+                            background: isMe ? "#111111" : "#ffffff",
+                            color: isMe ? "#ffffff" : "#111111",
+                            border: isMe ? "none" : "1px solid #e5e7eb",
+                            borderRadius: isMe
+                              ? "18px 18px 4px 18px"
+                              : "18px 18px 18px 4px",
+                            wordBreak: "break-word",
+                            maxWidth: "100%",
+                            boxShadow: isMe
+                              ? "none"
+                              : "0 1px 2px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+
+                        {isMe && (
+                          <div className="msg-actions flex items-center gap-1 mb-1">
+                            <button
+                              className="action-btn"
+                              title="Edit pesan"
+                              onClick={() => {
+                                setEditingId(msg.id);
+                                setEditText(msg.content);
+                              }}
+                            >
+                              <Pencil size={12} color="#6b7280" />
+                            </button>
+                            <button
+                              className="action-btn del"
+                              title="Hapus pesan"
+                              onClick={() => handleDelete(msg.id)}
+                            >
+                              <Trash2 size={12} color="#ef4444" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <span className="text-xs text-gray-400 mt-1 mx-1">
                       {formatTime(msg.created_at)}
                     </span>
@@ -650,7 +792,6 @@ export default function ChatPage() {
 
             {typingUsers.length > 0 && (
               <div className="msg-anim flex items-end gap-2.5">
-                {/* ✅ Tampilkan avatar sesuai akun yang sedang mengetik */}
                 <div className="flex items-end">
                   {typingUsers.slice(0, 3).map((typingUser, i) => (
                     <div
@@ -688,7 +829,6 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {/* Input Area */}
@@ -727,7 +867,7 @@ export default function ChatPage() {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2 px-1">
-                Deslyy : Mff kalo masih banyak Bug :))))
+              Deslyy : Mff kalo masih banyak Bug :))))
             </p>
           </div>
         </main>
