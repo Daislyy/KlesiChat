@@ -1,125 +1,30 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  Send,
   LogOut,
   Menu,
-  X,
   MessageCircle,
-  Hash,
-  Pencil,
-  Trash2,
-  Check,
+  Sun,
+  Moon,
+  ArrowDown,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import type {
+  Message,
+  TypingUser,
+  OnlineUser,
+  CurrentUser,
+} from "../types/chat";
+import { getChatTheme } from "../lib/chatTheme";
+import { playNotificationSound, unlockAudio } from "../lib/audioNotification";
 
-interface Message {
-  id: string;
-  content: string;
-  user_id: string;
-  username: string;
-  avatar_url?: string;
-  created_at: string;
-}
+import Avatar from "../components/chat/Avatar";
+import Sidebar from "../components/chat/Sidebar";
+import ChannelBar from "../components/chat/ChannelBar";
+import MessageItem from "../components/chat/MessageItem";
+import TypingIndicator from "../components/chat/TypingIndicator";
+import InputArea from "../components/chat/InputArea";
 
-interface TypingUser {
-  username: string;
-  avatar_url?: string;
-  timestamp: number;
-}
-
-interface OnlineUser {
-  username: string;
-  avatar_url?: string;
-}
-
-function formatTime(isoString: string) {
-  return new Date(isoString).toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-const AVATAR_COLORS: Record<string, { bg: string; text: string }> = {
-  A: { bg: "#dbeafe", text: "#1d4ed8" },
-  B: { bg: "#fce7f3", text: "#be185d" },
-  C: { bg: "#d1fae5", text: "#065f46" },
-  D: { bg: "#fef3c7", text: "#92400e" },
-  E: { bg: "#ede9fe", text: "#6d28d9" },
-  F: { bg: "#fee2e2", text: "#991b1b" },
-  G: { bg: "#ecfdf5", text: "#065f46" },
-  H: { bg: "#fff7ed", text: "#9a3412" },
-  I: { bg: "#f0f9ff", text: "#0369a1" },
-  J: { bg: "#fdf4ff", text: "#86198f" },
-  K: { bg: "#f0fdf4", text: "#166534" },
-  L: { bg: "#fffbeb", text: "#92400e" },
-  M: { bg: "#fff1f2", text: "#9f1239" },
-  N: { bg: "#f0f9ff", text: "#0c4a6e" },
-  O: { bg: "#faf5ff", text: "#581c87" },
-  P: { bg: "#fdf2f8", text: "#9d174d" },
-  Q: { bg: "#ecfeff", text: "#164e63" },
-  R: { bg: "#d1fae5", text: "#065f46" },
-  S: { bg: "#fce7f3", text: "#be185d" },
-  T: { bg: "#ede9fe", text: "#5b21b6" },
-  U: { bg: "#fef3c7", text: "#78350f" },
-  V: { bg: "#dbeafe", text: "#1e40af" },
-  W: { bg: "#fee2e2", text: "#7f1d1d" },
-  X: { bg: "#f0fdf4", text: "#14532d" },
-  Y: { bg: "#fff7ed", text: "#7c2d12" },
-  Z: { bg: "#fdf4ff", text: "#701a75" },
-};
-
-function getAvatarColor(username: string) {
-  const key = username[0]?.toUpperCase() || "A";
-  return AVATAR_COLORS[key] || { bg: "#e5e7eb", text: "#374151" };
-}
-
-function Avatar({
-  username,
-  avatar_url,
-  size = 32,
-}: {
-  username: string;
-  avatar_url?: string;
-  size?: number;
-}) {
-  const style = { width: size, height: size, flexShrink: 0 as const };
-  const { bg, text } = getAvatarColor(username);
-  if (avatar_url) {
-    return (
-      <img
-        src={avatar_url}
-        alt={username}
-        className="rounded-full object-cover"
-        style={style}
-      />
-    );
-  }
-  return (
-    <div
-      className="rounded-full flex items-center justify-center font-semibold"
-      style={{ ...style, background: bg, color: text, fontSize: size * 0.38 }}
-    >
-      {username[0]?.toUpperCase()}
-    </div>
-  );
-}
-
-function TypingDots() {
-  return (
-    <div className="flex items-center gap-1 px-1 py-0.5">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="w-1.5 h-1.5 rounded-full bg-gray-400"
-          style={{
-            animation: `typingBounce 1.2s ease-in-out infinite`,
-            animationDelay: `${i * 0.2}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+const SCROLL_THRESHOLD = 120;
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -127,26 +32,87 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  const [currentUser, setCurrentUser] = useState<{
-    id: string;
-    username: string;
-    avatar_url: string;
-  } | null>(null);
+  const [allUsers, setAllUsers] = useState<(OnlineUser & { id: string })[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
+  const [isDark, setIsDark] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
     null,
   );
 
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+
+  const t = getChatTheme(isDark);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = t.pageBg;
+    document.body.style.margin = "0";
+    document.body.style.padding = "0";
+    document.documentElement.style.backgroundColor = t.pageBg;
+    return () => {
+      document.body.style.backgroundColor = "";
+      document.documentElement.style.backgroundColor = "";
+    };
+  }, [t.pageBg]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (micStreamRef.current)
+        micStreamRef.current.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const checkNearBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const near = checkNearBottom();
+    setIsNearBottom(near);
+    if (near) setUnreadCount(0);
+  }, [checkNearBottom]);
+
+  useEffect(() => {
+    const newCount = messages.length;
+    const oldCount = prevMsgCountRef.current;
+    prevMsgCountRef.current = newCount;
+    if (newCount <= oldCount) return;
+    if (isNearBottom) {
+      scrollToBottom("smooth");
+      setUnreadCount(0);
+    } else setUnreadCount((prev) => prev + (newCount - oldCount));
+  }, [messages.length, isNearBottom, scrollToBottom]);
+
   const fetchMessages = useCallback(async () => {
     try {
       const { data: msgs } = await supabase
         .from("messages")
         .select(
-          "id, content, user_id, created_at, profiles(username, avatar_url)",
+          "id,content,type,audio_url,audio_duration,user_id,created_at,profiles(username,avatar_url)",
         )
         .order("created_at", { ascending: true });
       if (msgs) {
@@ -154,6 +120,9 @@ export default function ChatPage() {
           msgs.map((m: any) => ({
             id: m.id,
             content: m.content,
+            type: m.type || "text",
+            audio_url: m.audio_url || undefined,
+            audio_duration: m.audio_duration || undefined,
             user_id: m.user_id,
             created_at: m.created_at,
             username: m.profiles?.username || "unknown",
@@ -161,10 +130,51 @@ export default function ChatPage() {
           })),
         );
       }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
+    } catch (err) {
+      console.error(err);
     }
   }, []);
+
+  // Fungsi logout yang lengkap
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return; // Mencegah double click
+
+    setIsLoggingOut(true);
+
+    try {
+      // 1. Hapus presence typing user dari channel
+      if (typingChannelRef.current && currentUser) {
+        try {
+          await typingChannelRef.current.track({
+            username: currentUser.username,
+            avatar_url: currentUser.avatar_url,
+            isTyping: false,
+          });
+          await typingChannelRef.current.untrack();
+          await supabase.removeChannel(typingChannelRef.current);
+        } catch (err) {
+          console.error("Error cleaning up typing channel:", err);
+        }
+      }
+
+      // 2. Sign out dari Supabase
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error("Logout error:", error);
+        alert("Gagal keluar. Silakan coba lagi.");
+        setIsLoggingOut(false);
+        return;
+      }
+
+      // 3. Redirect ke halaman login
+      window.location.href = "/login";
+    } catch (err) {
+      console.error("Unexpected error during logout:", err);
+      alert("Terjadi kesalahan. Silakan coba lagi.");
+      setIsLoggingOut(false);
+    }
+  }, [currentUser, isLoggingOut]);
 
   useEffect(() => {
     let msgChannel: ReturnType<typeof supabase.channel>;
@@ -182,18 +192,34 @@ export default function ChatPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("username, avatar_url")
+        .select("username,avatar_url")
         .eq("id", user.id)
         .single();
-
-      const me = {
+      const me: CurrentUser = {
         id: user.id,
         username: profile?.username || "unknown",
         avatar_url: profile?.avatar_url || "",
       };
       setCurrentUser(me);
 
+      const { data: allProfiles } = await supabase
+        .from("profiles")
+        .select("id,username,avatar_url");
+      if (allProfiles) {
+        setAllUsers(
+          allProfiles.map((p: any) => ({
+            id: p.id,
+            username: p.username || "unknown",
+            avatar_url: p.avatar_url || "",
+          })),
+        );
+      }
+
       await fetchMessages();
+      setTimeout(() => {
+        prevMsgCountRef.current = 0;
+        scrollToBottom("instant" as ScrollBehavior);
+      }, 80);
       autoRefreshInterval = setInterval(fetchMessages, 2000);
 
       msgChannel = supabase
@@ -204,17 +230,31 @@ export default function ChatPage() {
           async (payload) => {
             const { data: p } = await supabase
               .from("profiles")
-              .select("username, avatar_url")
+              .select("username,avatar_url")
               .eq("id", payload.new.user_id)
               .single();
-            setMessages((prev) => [
-              ...prev,
-              {
-                ...(payload.new as Message),
-                username: p?.username || "unknown",
-                avatar_url: p?.avatar_url || "",
-              },
-            ]);
+            const newMsg: Message = {
+              ...(payload.new as any),
+              type: payload.new.type || "text",
+              username: p?.username || "unknown",
+              avatar_url: p?.avatar_url || "",
+            };
+            if (newMsg.user_id !== me.id) playNotificationSound();
+            setMessages((prev) => [...prev, newMsg]);
+            setNewMsgIds((prev) => {
+              const s = new Set(prev);
+              s.add(newMsg.id);
+              return s;
+            });
+            setTimeout(
+              () =>
+                setNewMsgIds((prev) => {
+                  const s = new Set(prev);
+                  s.delete(newMsg.id);
+                  return s;
+                }),
+              600,
+            );
           },
         )
         .on(
@@ -240,12 +280,9 @@ export default function ChatPage() {
         .subscribe();
 
       typingChannel = supabase.channel("typing-room", {
-        config: {
-          presence: { key: user.id },
-        },
+        config: { presence: { key: user.id } },
       });
       typingChannelRef.current = typingChannel;
-
       const syncPresenceState = () => {
         const state = typingChannel.presenceState();
         const all = Object.values(state).flat() as any[];
@@ -265,40 +302,139 @@ export default function ChatPage() {
             })),
         );
       };
-
       typingChannel
         .on("presence", { event: "sync" }, syncPresenceState)
         .on("presence", { event: "join" }, syncPresenceState)
         .on("presence", { event: "leave" }, syncPresenceState)
         .subscribe(async (status) => {
-          if (status === "SUBSCRIBED") {
+          if (status === "SUBSCRIBED")
             await typingChannel.track({
               username: me.username,
               avatar_url: me.avatar_url,
               isTyping: false,
             });
-          }
         });
     };
 
     init();
-
     return () => {
       if (msgChannel) supabase.removeChannel(msgChannel);
       if (typingChannel) supabase.removeChannel(typingChannel);
       typingChannelRef.current = null;
       if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     };
-  }, [fetchMessages]);
+  }, [fetchMessages, scrollToBottom]);
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "audio/ogg";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.start(100);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimerRef.current = setInterval(
+        () => setRecordingDuration((d) => d + 1),
+        1000,
+      );
+    } catch {
+      alert(
+        "Izin mikrofon ditolak. Tolong izinkan akses mikrofon di browser kamu.",
+      );
+    }
+  }
+
+  async function stopAndSendRecording() {
+    if (!mediaRecorderRef.current || !currentUser) return;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    const duration = recordingDuration;
+    return new Promise<void>((resolve) => {
+      const recorder = mediaRecorderRef.current!;
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        setIsSendingAudio(true);
+        try {
+          const mimeType = recorder.mimeType || "audio/webm";
+          const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: mimeType,
+          });
+          const fileName = `${currentUser.id}/${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("voice-messages")
+            .upload(fileName, audioBlob, {
+              contentType: mimeType,
+              upsert: false,
+            });
+          if (uploadError) throw uploadError;
+          const { data: urlData } = supabase.storage
+            .from("voice-messages")
+            .getPublicUrl(fileName);
+          await supabase.from("messages").insert({
+            content: "🎤 Pesan suara",
+            type: "audio",
+            audio_url: urlData.publicUrl,
+            audio_duration: duration,
+            user_id: currentUser.id,
+          });
+          setIsNearBottom(true);
+          setUnreadCount(0);
+        } catch {
+          alert("Gagal mengirim pesan suara. Coba lagi.");
+        } finally {
+          setIsSendingAudio(false);
+          audioChunksRef.current = [];
+        }
+        resolve();
+      };
+      recorder.stop();
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+      }
+    });
+  }
+
+  function cancelRecording() {
+    if (!mediaRecorderRef.current) return;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    mediaRecorderRef.current.onstop = null;
+    mediaRecorderRef.current.stop();
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingDuration(0);
+    audioChunksRef.current = [];
+  }
 
   async function handleSend() {
     if (!input.trim() || !currentUser) return;
     const content = input.trim();
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+    setIsNearBottom(true);
+    setUnreadCount(0);
     await supabase
       .from("messages")
-      .insert({ content, user_id: currentUser.id });
+      .insert({ content, type: "text", user_id: currentUser.id });
   }
 
   async function handleDelete(id: string) {
@@ -318,11 +454,6 @@ export default function ChatPage() {
       .from("messages")
       .update({ content: newContent })
       .eq("id", id);
-  }
-
-  function handleEditCancel() {
-    setEditingId(null);
-    setEditText("");
   }
 
   async function handleTyping() {
@@ -357,27 +488,52 @@ export default function ChatPage() {
     }
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   const typingLabel =
     typingUsers.length === 1
       ? `${typingUsers[0].username} sedang mengetik`
       : typingUsers.length > 1
-        ? `${typingUsers.map((t) => t.username).join(", ")} sedang mengetik`
+        ? `${typingUsers.map((tv) => tv.username).join(", ")} sedang mengetik`
         : "";
 
   if (!currentUser) {
     return (
       <div
-        className="h-screen flex items-center justify-center"
-        style={{ background: "#f5f5f5" }}
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: isDark ? "#0a0a0f" : "#f8f9fc",
+        }}
       >
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
-          <p className="text-sm text-gray-400">Memuat...</p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: `2px solid ${t.loaderBorderColor}`,
+              borderTop: `2px solid ${t.loaderTopColor}`,
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p
+            style={{
+              fontSize: 12,
+              color: t.loaderText,
+              fontFamily: "monospace",
+              letterSpacing: "0.1em",
+            }}
+          >
+            memuat...
+          </p>
         </div>
       </div>
     );
@@ -385,493 +541,302 @@ export default function ChatPage() {
 
   return (
     <div
-      className="h-screen flex flex-col"
-      style={{ background: "#f0f0f0", fontFamily: "sans-serif", color: "#111" }}
+      onClick={unlockAudio}
+      style={{
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: t.pageBg,
+        fontFamily: "'DM Sans',sans-serif",
+        color: isDark ? "#e2e8f0" : "#111827",
+        transition: "background 0.3s,color 0.3s",
+      }}
     >
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes typingBounce {
-          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-          30%            { transform: translateY(-4px); opacity: 1; }
-        }
-        .msg-anim { animation: fadeUp 0.18s ease forwards; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-item:hover { background: #f3f4f6; }
-        .online-item:hover { background: #f9fafb; }
-        .nav-btn:hover { background: #f3f4f6; }
-        .send-btn:hover { opacity: 0.85; }
-        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .msg-actions { opacity: 0; transition: opacity 0.15s; }
-        .msg-wrapper:hover .msg-actions { opacity: 1; }
-        .action-btn {
-          background: #ffffff;
-          border: 1px solid #e5e7eb;
-          border-radius: 6px;
-          padding: 4px 6px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.1s;
-        }
-        .action-btn:hover { background: #f3f4f6; }
-        .action-btn.del:hover { background: #fee2e2; border-color: #fca5a5; }
-      `}</style>
+      <GlobalStyles t={t} isDark={isDark} />
 
-      {/* Header */}
       <header
-        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
         style={{
-          background: "#ffffff",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 16px",
+          background: t.headerBg,
+          borderBottom: `1px solid ${t.headerBorder}`,
+          flexShrink: 0,
+          zIndex: 10,
+          boxShadow: isDark ? "none" : "0 1px 0 rgba(0,0,0,0.04)",
         }}
       >
-        <div className="flex items-center gap-3">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
-            className="md:hidden p-1.5 rounded-lg nav-btn transition-colors"
+            className="nav-btn md:hidden"
             onClick={() => setSidebarOpen(true)}
+            style={{ display: "flex" }}
           >
-            <Menu size={18} color="#374151" />
+            <Menu size={17} />
           </button>
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: "#111" }}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                background: t.logoGradient,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: t.logoShadow,
+              }}
             >
-              <MessageCircle size={15} color="#fff" />
+              <MessageCircle size={16} color="#fff" />
             </div>
-            <span className="font-bold text-gray-900 text-lg tracking-tight">
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 17,
+                color: t.appTitle,
+                letterSpacing: "-0.03em",
+              }}
+            >
               KlesiChat
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <a
-            href="/profile"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg nav-btn transition-colors text-sm text-gray-600"
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            className="theme-toggle"
+            onClick={() => setIsDark(!isDark)}
+            title={isDark ? "Tema Terang" : "Tema Gelap"}
           >
+            {isDark ? (
+              <Sun size={15} color="#fbbf24" />
+            ) : (
+              <Moon size={15} color="#7c3aed" />
+            )}
+          </button>
+          <a href="/profile" className="nav-btn">
             <Avatar
               username={currentUser.username}
               avatar_url={currentUser.avatar_url}
-              size={24}
+              size={26}
+              glow
+              isDark={isDark}
             />
-            <span className="hidden sm:inline font-medium">
+            <span
+              style={{
+                color: t.profileLinkColor,
+                fontWeight: 500,
+                display: "none",
+              }}
+              className="sm:inline"
+            >
               {currentUser.username}
             </span>
           </a>
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg nav-btn transition-colors text-sm text-gray-500"
+            className="nav-btn"
             onClick={handleLogout}
+            disabled={isLoggingOut}
+            style={{
+              opacity: isLoggingOut ? 0.6 : 1,
+              cursor: isLoggingOut ? "not-allowed" : "pointer",
+            }}
           >
-            <LogOut size={15} />
-            <span className="hidden sm:inline">Keluar</span>
+            {isLoggingOut ? (
+              <div
+                style={{
+                  width: 15,
+                  height: 15,
+                  borderRadius: "50%",
+                  border: `2px solid ${t.navBtnColor}`,
+                  borderTop: "2px solid transparent",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+            ) : (
+              <LogOut size={15} />
+            )}
+            <span style={{ display: "none" }} className="sm:inline">
+              {isLoggingOut ? "Keluar..." : "Keluar"}
+            </span>
           </button>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black/30 z-40 md:hidden backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          messages={messages}
+          onlineUsers={onlineUsers}
+          typingUsers={typingUsers}
+          currentUser={currentUser}
+          allUsers={allUsers}
+          isDark={isDark}
+          t={t}
+        />
 
-        {/* Sidebar */}
-        <aside
-          className={`fixed md:relative top-0 left-0 h-full z-50 md:z-auto flex flex-col w-64 flex-shrink-0 transition-transform duration-300 ${
-            sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-          }`}
-          style={{ background: "#ffffff", borderRight: "1px solid #e5e7eb" }}
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            transition: "background 0.3s",
+          }}
         >
-          <div
-            className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-            style={{ borderBottom: "1px solid #f3f4f6" }}
-          >
-            <span className="text-sm font-semibold text-gray-700">
-              Channels
-            </span>
-            <button
-              className="md:hidden p-1 rounded nav-btn"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X size={15} color="#6b7280" />
-            </button>
-          </div>
+          <ChannelBar
+            messageCount={messages.length}
+            onlineCount={onlineUsers.length}
+            isDark={isDark}
+            t={t}
+          />
 
-          <div
-            className="px-2 py-3"
-            style={{ borderBottom: "1px solid #f3f4f6" }}
-          >
+          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
             <div
-              className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer"
-              style={{ background: "#f3f4f6" }}
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              style={{
+                height: "100%",
+                overflowY: "auto",
+                padding: "20px 16px",
+                background: t.msgAreaBg,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                transition: "background 0.3s",
+                boxSizing: "border-box",
+              }}
             >
-              <Hash size={14} color="#6b7280" />
-              <span className="text-sm font-medium text-gray-900">
-                Public - Chat
-              </span>
-              <span
-                className="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-full"
-                style={{ background: "#111", color: "#fff" }}
-              >
-                {messages.length}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-4 pt-4 pb-2">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <p className="text-xs font-semibold text-gray-400 tracking-widest uppercase">
-                  Online — {onlineUsers.length}
-                </p>
-              </div>
-              {onlineUsers.length === 0 && (
-                <p className="text-xs text-gray-400 px-1">
-                  Belum ada yang online
-                </p>
-              )}
-              {onlineUsers.map((onlineUser) => {
-                const isTyping = typingUsers.some(
-                  (t) => t.username === onlineUser.username,
-                );
-                const isMe = onlineUser.username === currentUser.username;
-                return (
-                  <div
-                    key={onlineUser.username}
-                    className="online-item flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 transition-colors cursor-default"
-                  >
-                    <div className="relative flex-shrink-0">
-                      <Avatar
-                        username={onlineUser.username}
-                        avatar_url={onlineUser.avatar_url}
-                        size={34}
-                      />
-                      <div
-                        className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white"
-                        style={{ background: "#22c55e" }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {onlineUser.username}
-                        {isMe && (
-                          <span className="ml-1.5 text-xs font-normal text-gray-400">
-                            (kamu)
-                          </span>
-                        )}
-                      </p>
-                      <p
-                        className="text-xs truncate"
-                        style={{ color: isTyping ? "#22c55e" : "#9ca3af" }}
-                      >
-                        {isTyping ? "sedang mengetik..." : "aktif sekarang"}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div
-            className="p-3 flex-shrink-0"
-            style={{ borderTop: "1px solid #f3f4f6" }}
-          >
-            <a
-              href="/profile"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl online-item transition-colors"
-            >
-              <div className="relative flex-shrink-0">
-                <Avatar
-                  username={currentUser.username}
-                  avatar_url={currentUser.avatar_url}
-                  size={34}
-                />
-                <div
-                  className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white"
-                  style={{ background: "#22c55e" }}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">
-                  {currentUser.username}
-                </p>
-                <p className="text-xs text-gray-400">Lihat profil →</p>
-              </div>
-            </a>
-          </div>
-        </aside>
-
-        {/* Main Chat Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <div
-            className="px-5 py-3 flex-shrink-0 flex items-center gap-3"
-            style={{ background: "#ffffff", borderBottom: "1px solid #e5e7eb" }}
-          >
-            <Hash size={15} color="#9ca3af" />
-            <span className="text-sm font-semibold text-gray-800">
-              chat - room
-            </span>
-            <div className="w-px h-4 mx-1" style={{ background: "#e5e7eb" }} />
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-500">
-                {onlineUsers.length} online
-              </span>
-            </div>
-            <span className="text-xs text-gray-400 ml-auto">
-              {messages.length} pesan
-            </span>
-          </div>
-
-          {/* Messages */}
-          <div
-            className="flex-1 overflow-y-auto px-5 py-5 space-y-3"
-            style={{ background: "#f9fafb" }}
-          >
-            {messages.map((msg) => {
-              const isMe = msg.user_id === currentUser.id;
-              const isEditing = editingId === msg.id;
-
-              return (
-                <div
+              {messages.map((msg) => (
+                <MessageItem
                   key={msg.id}
-                  className={`msg-anim msg-wrapper flex items-end gap-2.5 ${
-                    isMe ? "flex-row-reverse" : "flex-row"
-                  }`}
-                >
-                  {!isMe && (
-                    <div className="flex-shrink-0">
-                      <Avatar
-                        username={msg.username}
-                        avatar_url={msg.avatar_url}
-                        size={30}
-                      />
-                    </div>
-                  )}
+                  msg={msg}
+                  isMe={msg.user_id === currentUser.id}
+                  isNew={newMsgIds.has(msg.id)}
+                  isEditing={editingId === msg.id}
+                  editText={editText}
+                  isDark={isDark}
+                  t={t}
+                  onEditStart={(id, content) => {
+                    setEditingId(id);
+                    setEditText(content);
+                  }}
+                  onEditChange={setEditText}
+                  onEditSave={handleEditSave}
+                  onEditCancel={() => {
+                    setEditingId(null);
+                    setEditText("");
+                  }}
+                  onDelete={handleDelete}
+                />
+              ))}
+              <TypingIndicator
+                typingUsers={typingUsers}
+                typingLabel={typingLabel}
+                isDark={isDark}
+                t={t}
+              />
+              <div ref={messagesEndRef} style={{ height: 1, flexShrink: 0 }} />
+            </div>
 
-                  <div
-                    className={`flex flex-col max-w-xs md:max-w-md lg:max-w-lg ${
-                      isMe ? "items-end" : "items-start"
-                    }`}
-                  >
-                    {!isMe && (
-                      <span className="text-xs font-medium text-gray-500 mb-1 ml-1">
-                        {msg.username}
-                      </span>
-                    )}
-
-                    {isEditing ? (
-                      <div
-                        className="flex flex-col gap-2 p-3 rounded-2xl"
-                        style={{
-                          background: "#ffffff",
-                          border: "1px solid #e5e7eb",
-                          minWidth: "200px",
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <textarea
-                          autoFocus
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleEditSave(msg.id);
-                            }
-                            if (e.key === "Escape") handleEditCancel();
-                          }}
-                          className="text-sm resize-none outline-none bg-transparent w-full"
-                          style={{
-                            color: "#111",
-                            minHeight: "60px",
-                            maxHeight: "120px",
-                          }}
-                        />
-                        <div className="flex items-center gap-2 justify-end">
-                          <button
-                            onClick={handleEditCancel}
-                            style={{
-                              background: "transparent",
-                              color: "#6b7280",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "6px",
-                              padding: "4px 10px",
-                              fontSize: "12px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Batal
-                          </button>
-                          <button
-                            onClick={() => handleEditSave(msg.id)}
-                            style={{
-                              background: "#111",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "6px",
-                              padding: "4px 10px",
-                              fontSize: "12px",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            <Check size={12} />
-                            Simpan
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        className={`flex items-end gap-1.5 ${
-                          isMe ? "flex-row-reverse" : "flex-row"
-                        }`}
-                      >
-                        <div
-                          className="px-4 py-2.5 text-sm leading-relaxed"
-                          style={{
-                            background: isMe ? "#111111" : "#ffffff",
-                            color: isMe ? "#ffffff" : "#111111",
-                            border: isMe ? "none" : "1px solid #e5e7eb",
-                            borderRadius: isMe
-                              ? "18px 18px 4px 18px"
-                              : "18px 18px 18px 4px",
-                            wordBreak: "break-word",
-                            maxWidth: "100%",
-                            boxShadow: isMe
-                              ? "none"
-                              : "0 1px 2px rgba(0,0,0,0.05)",
-                          }}
-                        >
-                          {msg.content}
-                        </div>
-
-                        {isMe && (
-                          <div className="msg-actions flex items-center gap-1 mb-1">
-                            <button
-                              className="action-btn"
-                              title="Edit pesan"
-                              onClick={() => {
-                                setEditingId(msg.id);
-                                setEditText(msg.content);
-                              }}
-                            >
-                              <Pencil size={12} color="#6b7280" />
-                            </button>
-                            <button
-                              className="action-btn del"
-                              title="Hapus pesan"
-                              onClick={() => handleDelete(msg.id)}
-                            >
-                              <Trash2 size={12} color="#ef4444" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <span className="text-xs text-gray-400 mt-1 mx-1">
-                      {formatTime(msg.created_at)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {typingUsers.length > 0 && (
-              <div className="msg-anim flex items-end gap-2.5">
-                <div className="flex items-end">
-                  {typingUsers.slice(0, 3).map((typingUser, i) => (
-                    <div
-                      key={typingUser.username}
-                      className="flex-shrink-0"
-                      style={{
-                        marginLeft: i > 0 ? "-8px" : "0",
-                        zIndex: typingUsers.length - i,
-                        position: "relative",
-                      }}
-                    >
-                      <Avatar
-                        username={typingUser.username}
-                        avatar_url={typingUser.avatar_url}
-                        size={30}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-xs font-medium text-gray-400 mb-1 ml-1">
-                    {typingLabel}
+            {!isNearBottom && (
+              <button
+                className="scroll-fab"
+                onClick={() => {
+                  setIsNearBottom(true);
+                  setUnreadCount(0);
+                  scrollToBottom("smooth");
+                }}
+                title="Scroll ke bawah"
+              >
+                {unreadCount > 0 && (
+                  <span className="unread-badge">
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
-                  <div
-                    className="px-4 py-3"
-                    style={{
-                      background: "#ffffff",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "18px 18px 18px 4px",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                    }}
-                  >
-                    <TypingDots />
-                  </div>
-                </div>
-              </div>
+                )}
+                <ArrowDown size={17} color={t.scrollBtnColor} />
+              </button>
             )}
           </div>
 
-          {/* Input Area */}
-          <div
-            className="px-4 py-3 flex-shrink-0"
-            style={{ borderTop: "1px solid #e5e7eb", background: "#ffffff" }}
-          >
-            <div
-              className="flex items-end gap-3 rounded-2xl px-4 py-2"
-              style={{ background: "#f9fafb", border: "1px solid #e5e7eb" }}
-            >
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleTextareaChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Ketik aja sob..."
-                rows={1}
-                className="flex-1 bg-transparent text-sm resize-none outline-none py-2"
-                style={{
-                  maxHeight: "120px",
-                  color: "#111",
-                  caretColor: "#111",
-                }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim()}
-                className="send-btn flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200"
-                style={{
-                  background: input.trim() ? "#111111" : "#e5e7eb",
-                  cursor: input.trim() ? "pointer" : "not-allowed",
-                }}
-              >
-                <Send size={15} color={input.trim() ? "#ffffff" : "#9ca3af"} />
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-2 px-1">
-              Deslyy : Mff kalo masih banyak Bug :))))
-            </p>
-          </div>
+          <InputArea
+            input={input}
+            isRecording={isRecording}
+            recordingDuration={recordingDuration}
+            isSendingAudio={isSendingAudio}
+            isDark={isDark}
+            t={t}
+            textareaRef={textareaRef}
+            onInputChange={handleTextareaChange}
+            onKeyDown={handleKeyDown}
+            onSend={handleSend}
+            onStartRecording={startRecording}
+            onStopAndSendRecording={stopAndSendRecording}
+            onCancelRecording={cancelRecording}
+          />
         </main>
       </div>
     </div>
+  );
+}
+
+function GlobalStyles({
+  t,
+  isDark,
+}: {
+  t: ReturnType<typeof getChatTheme>;
+  isDark: boolean;
+}) {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; background: ${t.pageBg}; transition: background 0.3s ease; }
+      @keyframes fadeSlideUp{from{opacity:0;transform:translateY(10px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+      @keyframes popIn{0%{opacity:0;transform:scale(0.85) translateY(8px);}70%{transform:scale(1.04) translateY(-1px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+      @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.3;}30%{transform:translateY(-5px);opacity:1;}}
+      @keyframes spin{to{transform:rotate(360deg);}}
+      @keyframes glowPulse{0%,100%{opacity:0.6;}50%{opacity:1;}}
+      @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+      @keyframes themePop{0%{transform:scale(0.9);}60%{transform:scale(1.1);}100%{transform:scale(1);}}
+      @keyframes scrollBtnIn{from{opacity:0;transform:translateY(10px) scale(0.85);}to{opacity:1;transform:translateY(0) scale(1);}}
+      @keyframes badgePop{0%{transform:scale(0);}60%{transform:scale(1.25);}100%{transform:scale(1);}}
+      @keyframes recPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.35;transform:scale(0.65);}}
+      @keyframes micRing{0%,100%{box-shadow:${t.micActiveShadow};}50%{box-shadow:0 0 0 6px rgba(239,68,68,0.15),${t.micActiveShadow};}}
+      .msg-new{animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;}
+      .msg-old{animation:fadeSlideUp 0.22s ease forwards;}
+      ::-webkit-scrollbar{width:3px;}
+      ::-webkit-scrollbar-thumb{background:${t.scrollThumb};border-radius:4px;}
+      ::-webkit-scrollbar-track{background:transparent;}
+      .msg-actions{opacity:0;transform:translateX(4px);transition:opacity 0.15s,transform 0.15s;}
+      .msg-wrapper:hover .msg-actions{opacity:1;transform:translateX(0);}
+      .action-btn{background:${t.actionBtnBg};border:1px solid ${t.actionBtnBorder};border-radius:7px;padding:5px 7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+      .action-btn:hover{background:${t.actionBtnHoverBg};border-color:${t.actionBtnHoverBorder};transform:scale(1.1);}
+      .action-btn.del:hover{background:${t.actionBtnDelHoverBg};border-color:${t.actionBtnDelHoverBorder};}
+      .nav-btn{border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px;transition:all 0.15s;cursor:pointer;border:none;background:transparent;color:${t.navBtnColor};font-size:13px;font-family:'DM Sans',sans-serif;text-decoration:none;}
+      .nav-btn:hover{background:${t.navBtnHoverBg};color:${t.navBtnHoverColor};}
+      .sidebar-user{border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:10px;transition:all 0.15s;cursor:default;text-decoration:none;}
+      .sidebar-user:hover{background:${isDark ? "#12121e" : "#f9fafb"};}
+      .input-wrap{transition:box-shadow 0.2s,border-color 0.2s;}
+      .input-wrap:focus-within{box-shadow:${t.inputWrapFocusShadow};}
+      .send-btn{transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);border:none;cursor:pointer;}
+      .send-btn:hover:not(:disabled){transform:scale(1.1);}
+      .send-btn:active:not(:disabled){transform:scale(0.93);}
+      .mic-btn{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);}
+      .mic-btn:hover:not(:disabled){transform:scale(1.1);}
+      .mic-btn:active:not(:disabled){transform:scale(0.93);}
+      .mic-btn.is-recording{animation:micRing 1.2s ease-in-out infinite;}
+      .online-pulse{animation:glowPulse 2s ease-in-out infinite;}
+      .theme-toggle{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:1px solid ${t.toggleBorder};background:${t.toggleBg};cursor:pointer;transition:all 0.25s;}
+      .theme-toggle:hover{transform:scale(1.1);}
+      .theme-toggle:active{animation:themePop 0.3s ease forwards;}
+      .scroll-fab{position:absolute;bottom:16px;right:16px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid ${t.scrollBtnBorder};background:${t.scrollBtnBg};box-shadow:${t.scrollBtnShadow};animation:scrollBtnIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards;transition:transform 0.15s,box-shadow 0.15s;z-index:20;}
+      .scroll-fab:hover{transform:scale(1.1) translateY(-2px);box-shadow:${t.scrollBtnShadow},0 0 0 4px ${isDark ? "rgba(139,92,246,0.1)" : "rgba(124,58,237,0.08)"};}
+      .scroll-fab:active{transform:scale(0.94);}
+      .unread-badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:10px;background:${t.badgeBg};color:#fff;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;animation:badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards;box-shadow:0 2px 8px rgba(124,58,237,0.45);border:1.5px solid ${isDark ? "#0a0a0f" : "#fff"};}
+      @media (max-width: 768px) { .md\\:hidden { display: none; } .sm\\:inline { display: none; } }
+      @media (min-width: 769px) { .md\\:hidden { display: flex; } .sm\\:inline { display: inline; } }
+    `}</style>
   );
 }

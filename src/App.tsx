@@ -4,6 +4,7 @@ import Login from "./pages/login";
 import ProfilePage from "./pages/profile";
 import ChatPage from "./pages/chat";
 import ProtectedRoute from "./components/ProtectedRoute";
+import DMPage from "./pages/dm";
 
 function App() {
   return (
@@ -25,6 +26,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dm"
+          element={
+            <ProtectedRoute>
+              <DMPage />
             </ProtectedRoute>
           }
         />
