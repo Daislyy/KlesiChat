@@ -61,7 +61,7 @@ export default function MessageItem({
         style={{
           display: "flex",
           flexDirection: "column",
-          maxWidth: "min(340px,70%)",
+          maxWidth: "min(420px,75%)",
           alignItems: isMe ? "flex-end" : "flex-start",
         }}
       >
@@ -69,7 +69,7 @@ export default function MessageItem({
           <span
             style={{
               fontSize: 11,
-              fontWeight: 600,
+              fontWeight: 700,
               color: t.senderNameColor,
               marginBottom: 4,
               marginLeft: 4,
@@ -160,9 +160,9 @@ export default function MessageItem({
           style={{
             fontSize: 10,
             color: t.timestampColor,
-            marginTop: 4,
-            marginLeft: 4,
-            marginRight: 4,
+            marginTop: 3,
+            marginLeft: 6,
+            marginRight: 6,
             fontFamily: "'DM Mono',monospace",
           }}
         >

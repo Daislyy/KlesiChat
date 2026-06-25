@@ -160,7 +160,7 @@ function NormalMode({
         style={{
           flex: 1, background: "transparent", border: "none", outline: "none",
           color: t.inputColor, fontSize: 13, resize: "none",
-          padding: "6px 0", maxHeight: 120, caretColor: t.inputCaret,
+          padding: "6px 0 6px 4px", maxHeight: 120, caretColor: t.inputCaret,
           fontFamily: "'DM Sans',sans-serif", lineHeight: 1.6,
         }}
       />
@@ -170,7 +170,7 @@ function NormalMode({
         disabled={isSendingAudio}
         className="mic-btn"
         style={{
-          flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+          flexShrink: 0, width: 36, height: 36, borderRadius: 12,
           background: t.micBtnBg, border: `1px solid ${t.micBtnBorder}`,
           opacity: isSendingAudio ? 0.5 : 1,
         }}
@@ -193,7 +193,7 @@ function NormalMode({
         disabled={!input.trim()}
         className="send-btn"
         style={{
-          flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+          flexShrink: 0, width: 36, height: 36, borderRadius: 12,
           display: "flex", alignItems: "center", justifyContent: "center",
           background: input.trim() ? t.sendBtnActiveBg : t.sendBtnInactiveBg,
           boxShadow: input.trim() ? t.sendBtnActiveShadow : "none",

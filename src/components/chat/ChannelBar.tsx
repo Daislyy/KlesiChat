@@ -12,13 +12,13 @@ export default function ChannelBar({ messageCount, onlineCount, isDark, t }: Cha
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12,
-      padding: "10px 20px",
+      padding: "12px 20px",
       background: t.channelBarBg,
       borderBottom: `1px solid ${t.channelBarBorder}`,
       flexShrink: 0,
       boxShadow: isDark ? "none" : "0 1px 0 rgba(0,0,0,0.03)",
     }}>
-      <Hash size={14} color={isDark ? "#4b5563" : "#9ca3af"} />
+      <Hash size={14} color={t.channelNameColor} />
       <span style={{ fontSize: 13, fontWeight: 600, color: t.channelNameColor }}>
         chat-room
       </span>

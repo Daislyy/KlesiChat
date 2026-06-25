@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { getChatTheme } from "../lib/chatTheme";
 import { playNotificationSound, unlockAudio } from "../lib/audioNotification";
@@ -16,7 +17,14 @@ export default function DMPage() {
     username: string;
     avatar_url: string;
   } | null>(null);
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    return localStorage.getItem("theme") === "dark" || 
+      (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  });
+
+  useEffect(() => {
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }, [isDark]);
   // Tambah state newMsgIds
   const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
 
@@ -306,10 +314,20 @@ export default function DMPage() {
       sender_id: currentUser.id,
       receiver_id: otherUser.id,
     });
+    setTimeout(scrollToBottom, 80);
   }
 
   const formatDur = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  // Auto-scroll to bottom whenever new messages arrive (from polling or realtime)
+  const prevMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      setTimeout(scrollToBottom, 60);
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length, scrollToBottom]);
 
   if (!currentUser || !otherUser) {
     return (
@@ -356,7 +374,11 @@ export default function DMPage() {
   }
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       onClick={unlockAudio}
       className="dm-page"
       style={{
@@ -382,8 +404,8 @@ export default function DMPage() {
   @keyframes headerSlideIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
   @keyframes pageIn{from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);}}
 
-  .dm-page{animation:pageIn 0.28s cubic-bezier(0.4,0,0.2,1) forwards;}
-  .dm-header{animation:headerSlideIn 0.25s ease forwards;}
+  .dm-page{}
+  .dm-header{}
   .dm-msg-new-me{animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;}
   .dm-msg-new-other{animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;}
   .dm-msg-old-me{animation:slideInRight 0.22s ease forwards;}
@@ -399,8 +421,11 @@ export default function DMPage() {
 `}</style>
 
       {/* Header */}
-      <header
+      <motion.header
         className="dm-header"
+        initial={{ y: -15, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.05 }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -452,8 +477,10 @@ export default function DMPage() {
             Pesan Pribadi
           </p>
         </div>
-        <button
+        <motion.button
           onClick={() => setIsDark(!isDark)}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9, rotate: 15 }}
           style={{
             display: "flex",
             alignItems: "center",
@@ -466,13 +493,19 @@ export default function DMPage() {
             cursor: "pointer",
           }}
         >
-          {isDark ? (
-            <Sun size={15} color="#fbbf24" />
-          ) : (
-            <Moon size={15} color="#7c3aed" />
-          )}
-        </button>
-      </header>
+          <AnimatePresence mode="wait">
+            {isDark ? (
+              <motion.div key="sun" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <Sun size={15} color="#fbbf24" />
+              </motion.div>
+            ) : (
+              <motion.div key="moon" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <Moon size={15} color="#7c3aed" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </motion.header>
 
       {/* Messages */}
       <div
@@ -487,7 +520,10 @@ export default function DMPage() {
         }}
       >
         {messages.length === 0 && (
-          <div
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
             style={{
               flex: 1,
               display: "flex",
@@ -502,7 +538,7 @@ export default function DMPage() {
             <p style={{ margin: 0, fontSize: 13, color: t.subText }}>
               Belum ada pesan. Mulai percakapan!
             </p>
-          </div>
+          </motion.div>
         )}
         {messages.map((msg) => {
           const isMe = msg.sender_id === currentUser.id;
@@ -750,6 +786,6 @@ export default function DMPage() {
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

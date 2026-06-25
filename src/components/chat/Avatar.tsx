@@ -33,7 +33,7 @@ export default function Avatar({
         src={avatar_url}
         alt={username}
         className="rounded-full object-cover"
-        style={style}
+        style={{ ...style, boxShadow: glow ? style.boxShadow : "inset 0 1px 3px rgba(0,0,0,0.1)" }}
       />
     );
 
@@ -46,6 +46,7 @@ export default function Avatar({
         color: text,
         fontSize: size * 0.38,
         border: `1px solid ${text}33`,
+        transition: "background 0.3s, box-shadow 0.3s",
       }}
     >
       {username[0]?.toUpperCase()}

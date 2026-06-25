@@ -97,7 +97,7 @@ export default function Sidebar({
 
       <aside
         style={{
-          width: 240,
+          width: 260,
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
@@ -180,7 +180,7 @@ export default function Sidebar({
                 fontSize: 10,
                 fontWeight: 700,
                 color: t.channelBadgeText,
-                padding: "2px 8px",
+                padding: "3px 10px",
                 borderRadius: 20,
                 background: t.channelBadgeBg,
               }}
@@ -237,7 +237,7 @@ export default function Sidebar({
               <div
                 key={ou.username}
                 className="sidebar-user"
-                style={{ marginBottom: 4, justifyContent: "space-between" }}
+                style={{ marginBottom: 6, justifyContent: "space-between" }}
               >
                 <div
                   style={{
@@ -427,7 +427,7 @@ export default function Sidebar({
               >
                 {currentUser.username}
               </p>
-              <p style={{ fontSize: 11, color: t.viewProfileColor, margin: 0 }}>
+              <p style={{ fontSize: 11, color: t.viewProfileColor, margin: 0, borderBottom: "1px solid transparent", transition: "border-color 0.2s" }}>
                 Lihat profil →
               </p>
             </div>

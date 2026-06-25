@@ -7,8 +7,10 @@ import {
   CheckCircle,
   Camera,
   ArrowLeft,
+  AlertCircle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface UserData {
   id: string;
@@ -22,10 +24,11 @@ interface UserData {
 interface Props {
   user: UserData;
   onUpdated?: (updated: Partial<UserData>) => void;
-  onBack?: () => void; // Tambahkan prop untuk handle back
+  onBack?: () => void;
+  isDark?: boolean;
 }
 
-export default function ProfileForm({ user, onUpdated, onBack }: Props) {
+export default function ProfileForm({ user, onUpdated, onBack, isDark = false }: Props) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -66,7 +69,6 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
       // Upload avatar jika ada file baru
       if (avatarFile) {
         const ext = avatarFile.name.split(".").pop();
-        // ✅ FIX: path harus {uid}/namafile agar sesuai RLS policy storage
         const filePath = `${user.id}/avatar.${ext}`;
 
         const { error: uploadError } = await supabase.storage
@@ -105,55 +107,78 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
     }
   };
 
+  const t = {
+    textColor: isDark ? "text-white" : "text-gray-900",
+    subColor: isDark ? "text-gray-400" : "text-gray-500",
+    inputBg: isDark ? "rgba(255,255,255,0.06)" : "#f9fafb",
+    inputBorder: isDark ? "rgba(255,255,255,0.12)" : "#d1d5db",
+    inputFocusBorder: isDark ? "focus:ring-white/30" : "focus:ring-indigo-500/30 focus:border-indigo-500",
+    inputTextColor: isDark ? "text-white" : "text-gray-900",
+    divider: isDark ? "rgba(255,255,255,0.08)" : "#e5e7eb",
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Tombol Back */}
       <div className="mb-4">
-        <button
+        <motion.button
           type="button"
           onClick={onBack || (() => window.history.back())}
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: isDark ? "rgba(255,255,255,0.06)" : "#ffffff",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "#d1d5db"}`,
           }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
+          whileHover={{ scale: 1.02, background: isDark ? "rgba(255,255,255,0.1)" : "#f3f4f6" }}
+          whileTap={{ scale: 0.98 }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg ${isDark ? "text-gray-300" : "text-gray-700"} transition-colors text-sm font-medium shadow-sm`}
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={16} />
           Kembali
-        </button>
+        </motion.button>
       </div>
 
       {/* Alert sukses */}
-      {success && (
-        <div
-          style={{
-            background: "rgba(34,197,94,0.1)",
-            border: "1px solid rgba(34,197,94,0.3)",
-          }}
-          className="text-green-400 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium"
-        >
-          <CheckCircle size={18} />
-          Profil berhasil diperbarui!
-        </div>
-      )}
+      <AnimatePresence>
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            style={{
+              background: "rgba(34,197,94,0.1)",
+              border: "1px solid rgba(34,197,94,0.3)",
+            }}
+            className="text-green-500 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium overflow-hidden"
+          >
+            <CheckCircle size={18} className="shrink-0" />
+            Profil berhasil diperbarui!
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Alert error */}
-      {error && (
-        <div
-          style={{
-            background: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.3)",
-          }}
-          className="text-red-400 px-4 py-3 rounded-xl text-sm font-medium"
-        >
-          {error}
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+            }}
+            className="text-red-500 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium overflow-hidden"
+          >
+            <AlertCircle size={18} className="shrink-0" />
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Foto Profil */}
       <div>
-        <label className="text-sm font-semibold mb-3 text-white flex items-center gap-2">
-          <ImageIcon size={16} className="text-gray-400" />
+        <label className={`text-sm font-semibold mb-3 ${t.textColor} flex items-center gap-2`}>
+          <ImageIcon size={16} className={t.subColor} />
           Foto Profil
         </label>
         <div className="flex items-center gap-5">
@@ -162,7 +187,12 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
             htmlFor="avatar-input"
             className="cursor-pointer group relative shrink-0"
           >
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 group-hover:border-white/40 transition-all">
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-20 h-20 rounded-full overflow-hidden border-2 group-hover:border-indigo-500/50 transition-colors"
+              style={{ borderColor: isDark ? "rgba(255,255,255,0.2)" : "#d1d5db" }}
+            >
               {preview ? (
                 <img
                   src={preview}
@@ -170,11 +200,11 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-white/10 flex items-center justify-center">
-                  <User size={28} className="text-gray-400" />
+                <div className={`w-full h-full ${isDark ? "bg-white/10" : "bg-gray-100"} flex items-center justify-center`}>
+                  <User size={28} className={t.subColor} />
                 </div>
               )}
-            </div>
+            </motion.div>
             {/* Overlay kamera */}
             <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={18} className="text-white" />
@@ -190,18 +220,20 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
               onChange={handleImageChange}
               className="hidden"
             />
-            <button
+            <motion.button
               type="button"
               onClick={() => document.getElementById("avatar-input")?.click()}
               style={{
-                background: "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.15)",
+                background: isDark ? "rgba(255,255,255,0.08)" : "#ffffff",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.15)" : "#d1d5db"}`,
               }}
-              className="text-sm text-gray-200 font-medium px-4 py-2 rounded-lg hover:bg-white/15 transition-all"
+              whileHover={{ scale: 1.02, background: isDark ? "rgba(255,255,255,0.12)" : "#f9fafb" }}
+              whileTap={{ scale: 0.98 }}
+              className={`text-sm ${isDark ? "text-gray-200" : "text-gray-700"} font-medium px-4 py-2 rounded-lg transition-colors shadow-sm`}
             >
               Pilih Foto
-            </button>
-            <p className="text-xs text-gray-500 mt-2">
+            </motion.button>
+            <p className={`text-xs ${t.subColor} mt-2`}>
               JPG, PNG, atau GIF · Maks. 2MB
             </p>
           </div>
@@ -209,12 +241,12 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
       </div>
 
       {/* Divider */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+      <div style={{ borderTop: `1px solid ${t.divider}` }} />
 
       {/* Username */}
       <div>
-        <label className="text-sm font-semibold mb-2 text-white flex items-center gap-2">
-          <User size={16} className="text-gray-400" />
+        <label className={`text-sm font-semibold mb-2 ${t.textColor} flex items-center gap-2`}>
+          <User size={16} className={t.subColor} />
           Username
         </label>
         <input
@@ -224,18 +256,18 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
           required
           minLength={3}
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: t.inputBg,
+            border: `1px solid ${t.inputBorder}`,
           }}
-          className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 text-white placeholder-gray-500 transition-all text-sm"
+          className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 ${t.inputFocusBorder} ${t.inputTextColor} placeholder-gray-500 transition-all text-sm`}
           placeholder="Masukkan username"
         />
       </div>
 
       {/* Email */}
       <div>
-        <label className="text-sm font-semibold mb-2 text-white flex items-center gap-2">
-          <Mail size={16} className="text-gray-400" />
+        <label className={`text-sm font-semibold mb-2 ${t.textColor} flex items-center gap-2`}>
+          <Mail size={16} className={t.subColor} />
           Email
         </label>
         <input
@@ -244,26 +276,28 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
           defaultValue={user.email}
           required
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: t.inputBg,
+            border: `1px solid ${t.inputBorder}`,
           }}
-          className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 text-white placeholder-gray-500 transition-all text-sm"
+          className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 ${t.inputFocusBorder} ${t.inputTextColor} placeholder-gray-500 transition-all text-sm`}
           placeholder="Masukkan email"
         />
       </div>
 
       {/* Tombol aksi */}
       <div className="flex gap-3 pt-1">
-        <button
+        <motion.button
           type="submit"
           disabled={loading}
           style={{
-            background: loading
-              ? "rgba(255,255,255,0.1)"
-              : "rgba(255,255,255,0.15)",
-            border: "1px solid rgba(255,255,255,0.2)",
+            background: isDark 
+              ? "rgba(255,255,255,0.15)" 
+              : "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+            border: isDark ? "1px solid rgba(255,255,255,0.2)" : "none",
           }}
-          className="flex-1 text-white font-semibold py-3 px-6 rounded-xl transition-all hover:bg-white/20 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+          whileHover={{ scale: loading ? 1 : 1.02 }}
+          whileTap={{ scale: loading ? 1 : 0.98 }}
+          className="flex-1 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-md"
         >
           {loading ? (
             <>
@@ -273,19 +307,21 @@ export default function ProfileForm({ user, onUpdated, onBack }: Props) {
           ) : (
             "Simpan Perubahan"
           )}
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
           onClick={() => window.location.reload()}
           disabled={loading}
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "#d1d5db"}`,
           }}
-          className="px-5 py-3 rounded-xl transition-all hover:bg-white/10 font-semibold text-gray-400 hover:text-gray-200 disabled:opacity-50 text-sm"
+          whileHover={{ scale: loading ? 1 : 1.02, background: isDark ? "rgba(255,255,255,0.08)" : "#f9fafb" }}
+          whileTap={{ scale: loading ? 1 : 0.98 }}
+          className={`px-5 py-3 rounded-xl transition-all font-semibold ${isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-600 hover:text-gray-800"} disabled:opacity-50 text-sm`}
         >
           Batal
-        </button>
+        </motion.button>
       </div>
     </form>
   );

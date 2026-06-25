@@ -1,12 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import {
-  LogOut,
-  Menu,
-  MessageCircle,
-  Sun,
-  Moon,
-  ArrowDown,
-} from "lucide-react";
+import { LogOut, Menu, Sun, Moon, ArrowDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import type {
   Message,
@@ -16,6 +10,7 @@ import type {
 } from "../types/chat";
 import { getChatTheme } from "../lib/chatTheme";
 import { playNotificationSound, unlockAudio } from "../lib/audioNotification";
+import LOGO_SRC from "../assets/bee.png";
 
 import Avatar from "../components/chat/Avatar";
 import Sidebar from "../components/chat/Sidebar";
@@ -37,7 +32,14 @@ export default function ChatPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    return localStorage.getItem("theme") === "dark" || 
+      (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  });
+
+  useEffect(() => {
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }, [isDark]);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -135,14 +137,10 @@ export default function ChatPage() {
     }
   }, []);
 
-  // Fungsi logout yang lengkap
   const handleLogout = useCallback(async () => {
-    if (isLoggingOut) return; // Mencegah double click
-
+    if (isLoggingOut) return;
     setIsLoggingOut(true);
-
     try {
-      // 1. Hapus presence typing user dari channel
       if (typingChannelRef.current && currentUser) {
         try {
           await typingChannelRef.current.track({
@@ -153,25 +151,19 @@ export default function ChatPage() {
           await typingChannelRef.current.untrack();
           await supabase.removeChannel(typingChannelRef.current);
         } catch (err) {
-          console.error("Error cleaning up typing channel:", err);
+          console.error(err);
         }
       }
-
-      // 2. Sign out dari Supabase
       const { error } = await supabase.auth.signOut();
-
       if (error) {
-        console.error("Logout error:", error);
         alert("Gagal keluar. Silakan coba lagi.");
         setIsLoggingOut(false);
         return;
       }
-
-      // 3. Redirect ke halaman login
       window.location.href = "/login";
     } catch (err) {
-      console.error("Unexpected error during logout:", err);
-      alert("Terjadi kesalahan. Silakan coba lagi.");
+      console.error(err);
+      alert("Terjadi kesalahan.");
       setIsLoggingOut(false);
     }
   }, [currentUser, isLoggingOut]);
@@ -205,7 +197,7 @@ export default function ChatPage() {
       const { data: allProfiles } = await supabase
         .from("profiles")
         .select("id,username,avatar_url");
-      if (allProfiles) {
+      if (allProfiles)
         setAllUsers(
           allProfiles.map((p: any) => ({
             id: p.id,
@@ -213,7 +205,6 @@ export default function ChatPage() {
             avatar_url: p.avatar_url || "",
           })),
         );
-      }
 
       await fetchMessages();
       setTimeout(() => {
@@ -348,9 +339,7 @@ export default function ChatPage() {
         1000,
       );
     } catch {
-      alert(
-        "Izin mikrofon ditolak. Tolong izinkan akses mikrofon di browser kamu.",
-      );
+      alert("Izin mikrofon ditolak.");
     }
   }
 
@@ -383,17 +372,19 @@ export default function ChatPage() {
           const { data: urlData } = supabase.storage
             .from("voice-messages")
             .getPublicUrl(fileName);
-          await supabase.from("messages").insert({
-            content: "🎤 Pesan suara",
-            type: "audio",
-            audio_url: urlData.publicUrl,
-            audio_duration: duration,
-            user_id: currentUser.id,
-          });
+          await supabase
+            .from("messages")
+            .insert({
+              content: "🎤 Pesan suara",
+              type: "audio",
+              audio_url: urlData.publicUrl,
+              audio_duration: duration,
+              user_id: currentUser.id,
+            });
           setIsNearBottom(true);
           setUnreadCount(0);
         } catch {
-          alert("Gagal mengirim pesan suara. Coba lagi.");
+          alert("Gagal mengirim pesan suara.");
         } finally {
           setIsSendingAudio(false);
           audioChunksRef.current = [];
@@ -495,6 +486,9 @@ export default function ChatPage() {
         ? `${typingUsers.map((tv) => tv.username).join(", ")} sedang mengetik`
         : "";
 
+  // Warna kotak logo di header ikut tema
+  const headerLogoBg = isDark ? "#444444" : "#1a1a1a";
+
   if (!currentUser) {
     return (
       <div
@@ -540,7 +534,11 @@ export default function ChatPage() {
   }
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -15 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       onClick={unlockAudio}
       style={{
         height: "100vh",
@@ -554,7 +552,10 @@ export default function ChatPage() {
     >
       <GlobalStyles t={t} isDark={isDark} />
 
-      <header
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.1 }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -576,19 +577,42 @@ export default function ChatPage() {
             <Menu size={17} />
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* ★ Logo ikut tema */}
             <div
+              className="header-logo-box"
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
-                background: t.logoGradient,
+                width: 36,
+                height: 36,
+                borderRadius: 11,
+                background: headerLogoBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 boxShadow: t.logoShadow,
+                overflow: "hidden",
+                flexShrink: 0,
+                transition: "background 0.3s, transform 0.25s, box-shadow 0.25s",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "scale(1.08)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
               }}
             >
-              <MessageCircle size={16} color="#fff" />
+              <img
+                src={LOGO_SRC}
+                alt="KlesiChat Logo"
+                draggable={false}
+                style={{
+                  width: "80%",
+                  height: "80%",
+                  objectFit: "contain",
+                  imageRendering: "auto",
+                  filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.3))",
+                }}
+              />
             </div>
             <span
               style={{
@@ -603,17 +627,25 @@ export default function ChatPage() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button
+          <motion.button
             className="theme-toggle"
             onClick={() => setIsDark(!isDark)}
             title={isDark ? "Tema Terang" : "Tema Gelap"}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9, rotate: 15 }}
           >
-            {isDark ? (
-              <Sun size={15} color="#fbbf24" />
-            ) : (
-              <Moon size={15} color="#7c3aed" />
-            )}
-          </button>
+            <AnimatePresence mode="wait">
+              {isDark ? (
+                <motion.div key="sun" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                  <Sun size={15} color="#fbbf24" />
+                </motion.div>
+              ) : (
+                <motion.div key="moon" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                  <Moon size={15} color="#7c3aed" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.button>
           <a href="/profile" className="nav-btn">
             <Avatar
               username={currentUser.username}
@@ -661,7 +693,7 @@ export default function ChatPage() {
             </span>
           </button>
         </div>
-      </header>
+      </motion.header>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <Sidebar
@@ -740,24 +772,37 @@ export default function ChatPage() {
               <div ref={messagesEndRef} style={{ height: 1, flexShrink: 0 }} />
             </div>
 
-            {!isNearBottom && (
-              <button
-                className="scroll-fab"
-                onClick={() => {
-                  setIsNearBottom(true);
-                  setUnreadCount(0);
-                  scrollToBottom("smooth");
-                }}
-                title="Scroll ke bawah"
-              >
-                {unreadCount > 0 && (
-                  <span className="unread-badge">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-                <ArrowDown size={17} color={t.scrollBtnColor} />
-              </button>
-            )}
+            <AnimatePresence>
+              {!isNearBottom && (
+                <motion.button
+                  className="scroll-fab"
+                  initial={{ opacity: 0, scale: 0.6, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.6, y: 20 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.94 }}
+                  onClick={() => {
+                    setIsNearBottom(true);
+                    setUnreadCount(0);
+                    scrollToBottom("smooth");
+                  }}
+                  title="Scroll ke bawah"
+                >
+                  {unreadCount > 0 && (
+                    <motion.span
+                      className="unread-badge"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </motion.span>
+                  )}
+                  <ArrowDown size={17} color={t.scrollBtnColor} />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
           <InputArea
@@ -777,7 +822,7 @@ export default function ChatPage() {
           />
         </main>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -798,7 +843,6 @@ function GlobalStyles({
       @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.3;}30%{transform:translateY(-5px);opacity:1;}}
       @keyframes spin{to{transform:rotate(360deg);}}
       @keyframes glowPulse{0%,100%{opacity:0.6;}50%{opacity:1;}}
-      @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
       @keyframes themePop{0%{transform:scale(0.9);}60%{transform:scale(1.1);}100%{transform:scale(1);}}
       @keyframes scrollBtnIn{from{opacity:0;transform:translateY(10px) scale(0.85);}to{opacity:1;transform:translateY(0) scale(1);}}
       @keyframes badgePop{0%{transform:scale(0);}60%{transform:scale(1.25);}100%{transform:scale(1);}}
@@ -806,12 +850,12 @@ function GlobalStyles({
       @keyframes micRing{0%,100%{box-shadow:${t.micActiveShadow};}50%{box-shadow:0 0 0 6px rgba(239,68,68,0.15),${t.micActiveShadow};}}
       .msg-new{animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;}
       .msg-old{animation:fadeSlideUp 0.22s ease forwards;}
-      ::-webkit-scrollbar{width:3px;}
+      ::-webkit-scrollbar{width:5px;}
       ::-webkit-scrollbar-thumb{background:${t.scrollThumb};border-radius:4px;}
       ::-webkit-scrollbar-track{background:transparent;}
       .msg-actions{opacity:0;transform:translateX(4px);transition:opacity 0.15s,transform 0.15s;}
       .msg-wrapper:hover .msg-actions{opacity:1;transform:translateX(0);}
-      .action-btn{background:${t.actionBtnBg};border:1px solid ${t.actionBtnBorder};border-radius:7px;padding:5px 7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+      .action-btn{background:${t.actionBtnBg};border:1px solid ${t.actionBtnBorder};border-radius:7px;padding:5px 7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;backdrop-filter:blur(4px);}
       .action-btn:hover{background:${t.actionBtnHoverBg};border-color:${t.actionBtnHoverBorder};transform:scale(1.1);}
       .action-btn.del:hover{background:${t.actionBtnDelHoverBg};border-color:${t.actionBtnDelHoverBorder};}
       .nav-btn{border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px;transition:all 0.15s;cursor:pointer;border:none;background:transparent;color:${t.navBtnColor};font-size:13px;font-family:'DM Sans',sans-serif;text-decoration:none;}
@@ -832,7 +876,7 @@ function GlobalStyles({
       .theme-toggle:hover{transform:scale(1.1);}
       .theme-toggle:active{animation:themePop 0.3s ease forwards;}
       .scroll-fab{position:absolute;bottom:16px;right:16px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid ${t.scrollBtnBorder};background:${t.scrollBtnBg};box-shadow:${t.scrollBtnShadow};animation:scrollBtnIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards;transition:transform 0.15s,box-shadow 0.15s;z-index:20;}
-      .scroll-fab:hover{transform:scale(1.1) translateY(-2px);box-shadow:${t.scrollBtnShadow},0 0 0 4px ${isDark ? "rgba(139,92,246,0.1)" : "rgba(124,58,237,0.08)"};}
+      .scroll-fab:hover{transform:scale(1.1) translateY(-2px);}
       .scroll-fab:active{transform:scale(0.94);}
       .unread-badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:10px;background:${t.badgeBg};color:#fff;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;animation:badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards;box-shadow:0 2px 8px rgba(124,58,237,0.45);border:1.5px solid ${isDark ? "#0a0a0f" : "#fff"};}
       @media (max-width: 768px) { .md\\:hidden { display: none; } .sm\\:inline { display: none; } }

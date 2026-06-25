@@ -1,15 +1,18 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Register from "./pages/register";
 import Login from "./pages/login";
 import ProfilePage from "./pages/profile";
 import ChatPage from "./pages/chat";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DMPage from "./pages/dm";
+import { AnimatePresence } from "framer-motion";
 
-function App() {
+function AnimatedRoutes() {
+  const location = useLocation();
+
   return (
-    <BrowserRouter>
-      <Routes>
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Register />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
@@ -38,6 +41,14 @@ function App() {
           }
         />
       </Routes>
+    </AnimatePresence>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AnimatedRoutes />
     </BrowserRouter>
   );
 }
