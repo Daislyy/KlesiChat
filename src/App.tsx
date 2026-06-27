@@ -5,6 +5,7 @@ import ProfilePage from "./pages/profile";
 import ChatPage from "./pages/chat";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DMPage from "./pages/dm";
+import Landing from "./pages/landing";
 import { AnimatePresence } from "framer-motion";
 
 function AnimatedRoutes() {
@@ -13,7 +14,7 @@ function AnimatedRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Register />} />
+        <Route path="/" element={<Landing />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route

@@ -9,6 +9,9 @@ import {
   Mail,
   Lock,
   CheckCircle2,
+  MessageSquare,
+  Rocket,
+  AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import LOGO_SRC from "../assets/bee.png";
@@ -268,17 +271,17 @@ export default function Register() {
       style={{
         minHeight: "100vh",
         display: "flex",
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'Inter', sans-serif",
         background: t.pageBg,
         transition: "background 0.4s",
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         @keyframes spin{to{transform:rotate(360deg);}}
         @keyframes orbitRotate{from{transform:rotate(0deg) translateX(80px) rotate(0deg);}to{transform:rotate(360deg) translateX(80px) rotate(-360deg);}}
         @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-4px);opacity:1;}}
-        .login-input{width:100%;box-sizing:border-box;padding:12px 16px 12px 40px;border-radius:12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:all 0.25s cubic-bezier(0.4,0,0.2,1);}
+        .login-input{width:100%;box-sizing:border-box;padding:12px 16px 12px 40px;border-radius:12px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:all 0.25s cubic-bezier(0.4,0,0.2,1);}
         .login-input::placeholder{color:${t.subtitleColor};opacity:0.7;}
         .orbit-dot{position:absolute;width:8px;height:8px;border-radius:50%;animation:orbitRotate 12s linear infinite;}
         .orbit-dot-2{animation:orbitRotate 18s linear infinite reverse;}
@@ -502,8 +505,8 @@ export default function Register() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
             style={{
-              fontFamily: "'Syne',sans-serif",
-              fontSize: 36,
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 34,
               fontWeight: 800,
               color: t.panelTitle,
               margin: "0 0 8px",
@@ -539,7 +542,11 @@ export default function Register() {
               justifyContent: "center",
             }}
           >
-            {["👤", "💬", "🚀"].map((e, i) => (
+            {[
+              <User size={16} color={t.labelColor} />,
+              <MessageSquare size={16} color={t.labelColor} />,
+              <Rocket size={16} color={t.labelColor} />,
+            ].map((icon, i) => (
               <motion.div
                 key={i}
                 whileHover={{ scale: 1.15, rotate: 5 }}
@@ -553,11 +560,10 @@ export default function Register() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 18,
                   cursor: "default",
                 }}
               >
-                {e}
+                {icon}
               </motion.div>
             ))}
           </motion.div>
@@ -679,7 +685,7 @@ export default function Register() {
             </motion.div>
             <h1
               style={{
-                fontFamily: "'Syne',sans-serif",
+                fontFamily: "'Inter', sans-serif",
                 fontSize: 22,
                 fontWeight: 800,
                 color: t.titleColor,
@@ -699,9 +705,9 @@ export default function Register() {
             <motion.div variants={staggerItem} style={{ marginBottom: 24 }}>
               <h2
                 style={{
-                  fontFamily: "'Syne',sans-serif",
+                  fontFamily: "'Inter', sans-serif",
                   fontSize: 24,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: t.titleColor,
                   margin: "0 0 6px",
                   letterSpacing: "-0.03em",
@@ -776,7 +782,7 @@ export default function Register() {
                     gap: 8,
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>⚠️</span>
+                  <AlertCircle size={16} color={t.errorColor} />
                   <span
                     style={{ fontSize: 13, color: t.errorColor, fontWeight: 500 }}
                   >
@@ -1047,7 +1053,7 @@ export default function Register() {
                     borderRadius: 12,
                     fontSize: 15,
                     fontWeight: 600,
-                    fontFamily: "'DM Sans', sans-serif",
+                    fontFamily: "'Inter', sans-serif",
                     cursor: isLoading || success ? "not-allowed" : "pointer",
                     letterSpacing: "0.01em",
                     background: isLoading || success ? t.btnSuccessBg : t.btnBg,
@@ -1113,7 +1119,7 @@ export default function Register() {
                 style={{
                   fontSize: 11,
                   color: t.dividerText,
-                  fontFamily: "'DM Mono',monospace",
+                  fontFamily: "'Inter', sans-serif",
                   letterSpacing: "0.08em",
                 }}
               >
@@ -1155,7 +1161,7 @@ export default function Register() {
                 fontSize: 10,
                 color: t.creditColor,
                 margin: "18px 0 0",
-                fontFamily: "'DM Mono',monospace",
+                fontFamily: "'Inter', sans-serif",
               }}
             >
               Deslyy : Mff kalo masih banyak Bug :))))
