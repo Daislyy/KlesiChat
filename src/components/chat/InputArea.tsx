@@ -1,7 +1,8 @@
 import { useRef } from "react";
-import { Send, X, Mic, Image as ImageIcon } from "lucide-react";
+import { Send, X, Mic, Image as ImageIcon, Paperclip } from "lucide-react";
 import type { ChatTheme } from "../../lib/chatTheme";
 import { formatDuration } from "../../lib/chatTheme";
+import { formatFileSize } from "./FileAttachment";
 
 interface InputAreaProps {
   input: string;
@@ -11,6 +12,8 @@ interface InputAreaProps {
   selectedImage: File | null;
   imagePreviewUrl: string | null;
   isUploadingImage: boolean;
+  selectedFile: File | null;
+  isUploadingFile: boolean;
   isDark: boolean;
   t: ChatTheme;
   onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -21,6 +24,8 @@ interface InputAreaProps {
   onCancelRecording: () => void;
   onSelectImage: (file: File) => void;
   onRemoveImage: () => void;
+  onSelectFile: (file: File) => void;
+  onRemoveFile: () => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -32,6 +37,8 @@ export default function InputArea({
   selectedImage,
   imagePreviewUrl,
   isUploadingImage,
+  selectedFile,
+  isUploadingFile,
   isDark,
   t,
   onInputChange,
@@ -42,11 +49,14 @@ export default function InputArea({
   onCancelRecording,
   onSelectImage,
   onRemoveImage,
+  onSelectFile,
+  onRemoveFile,
   textareaRef,
 }: InputAreaProps) {
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (!file.type.startsWith("image/")) {
@@ -54,6 +64,18 @@ export default function InputArea({
         return;
       }
       onSelectImage(file);
+      e.target.value = "";
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 50 * 1024 * 1024) {
+        alert("Ukuran berkas maksimal 50 MB.");
+        return;
+      }
+      onSelectFile(file);
       e.target.value = "";
     }
   };
@@ -70,8 +92,14 @@ export default function InputArea({
     >
       <input
         type="file"
-        ref={fileInputRef}
+        ref={imageInputRef}
         accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleImageChange}
+      />
+      <input
+        type="file"
+        ref={fileInputRef}
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
@@ -145,6 +173,76 @@ export default function InputArea({
         </div>
       )}
 
+      {/* Generic File Preview Banner */}
+      {selectedFile && (
+        <div
+          style={{
+            marginBottom: 8,
+            padding: "8px 12px",
+            borderRadius: 14,
+            background: isDark ? "rgba(40,40,48,0.9)" : "rgba(240,240,246,0.9)",
+            border: `1px solid ${isDark ? "#3f3f4e" : "#e2e2ec"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            maxWidth: 340,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 8,
+                background: isDark ? "rgba(139,92,246,0.2)" : "rgba(124,58,237,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Paperclip size={18} color={isDark ? "#a78bfa" : "#7c3aed"} />
+            </div>
+            <div style={{ overflow: "hidden" }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: t.inputColor,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {selectedFile.name}
+              </div>
+              <div style={{ fontSize: 10, color: isDark ? "#888899" : "#666677" }}>
+                {formatFileSize(selectedFile.size)} • Siap dikirim
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onRemoveFile}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: "none",
+              background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+              color: isDark ? "#bbb" : "#555",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="Batal kirim berkas"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div
         className="input-wrap"
         style={{
@@ -169,8 +267,10 @@ export default function InputArea({
           <NormalMode
             input={input}
             isSendingAudio={isSendingAudio}
+            hasAttachment={!!selectedImage || !!selectedFile}
+            isUploading={isUploadingImage || isUploadingFile}
             hasImage={!!selectedImage}
-            isUploadingImage={isUploadingImage}
+            hasFile={!!selectedFile}
             isDark={isDark}
             t={t}
             textareaRef={textareaRef}
@@ -178,7 +278,8 @@ export default function InputArea({
             onKeyDown={onKeyDown}
             onSend={onSend}
             onStartRecording={onStartRecording}
-            onOpenImagePicker={() => fileInputRef.current?.click()}
+            onOpenImagePicker={() => imageInputRef.current?.click()}
+            onOpenFilePicker={() => fileInputRef.current?.click()}
           />
         )}
       </div>
@@ -292,8 +393,10 @@ function RecordingMode({
 interface NormalModeProps {
   input: string;
   isSendingAudio: boolean;
+  hasAttachment: boolean;
+  isUploading: boolean;
   hasImage: boolean;
-  isUploadingImage: boolean;
+  hasFile: boolean;
   isDark: boolean;
   t: ChatTheme;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -302,13 +405,16 @@ interface NormalModeProps {
   onSend: () => void;
   onStartRecording: () => void;
   onOpenImagePicker: () => void;
+  onOpenFilePicker: () => void;
 }
 
 function NormalMode({
   input,
   isSendingAudio,
+  hasAttachment,
+  isUploading,
   hasImage,
-  isUploadingImage,
+  hasFile,
   isDark,
   t,
   textareaRef,
@@ -317,50 +423,92 @@ function NormalMode({
   onSend,
   onStartRecording,
   onOpenImagePicker,
+  onOpenFilePicker,
 }: NormalModeProps) {
-  const canSend = (input.trim().length > 0 || hasImage) && !isUploadingImage;
+  const canSend = (input.trim().length > 0 || hasAttachment) && !isUploading;
 
   return (
     <>
-      <button
-        type="button"
-        onClick={onOpenImagePicker}
-        disabled={isUploadingImage || isSendingAudio}
-        style={{
-          flexShrink: 0,
-          width: 34,
-          height: 34,
-          borderRadius: 10,
-          border: "none",
-          background: hasImage
-            ? isDark
-              ? "rgba(139,92,246,0.25)"
-              : "rgba(124,58,237,0.15)"
-            : "transparent",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          transition: "all 0.2s ease",
-          color: hasImage
-            ? isDark
-              ? "#a78bfa"
-              : "#7c3aed"
-            : isDark
-            ? "#8a8a9a"
-            : "#6b7280",
-        }}
-        title="Kirim gambar"
-      >
-        <ImageIcon size={17} />
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <button
+          type="button"
+          onClick={onOpenImagePicker}
+          disabled={isUploading || isSendingAudio}
+          style={{
+            flexShrink: 0,
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: hasImage
+              ? isDark
+                ? "rgba(139,92,246,0.25)"
+                : "rgba(124,58,237,0.15)"
+              : "transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            color: hasImage
+              ? isDark
+                ? "#a78bfa"
+                : "#7c3aed"
+              : isDark
+              ? "#8a8a9a"
+              : "#6b7280",
+          }}
+          title="Kirim gambar"
+        >
+          <ImageIcon size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenFilePicker}
+          disabled={isUploading || isSendingAudio}
+          style={{
+            flexShrink: 0,
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "none",
+            background: hasFile
+              ? isDark
+                ? "rgba(139,92,246,0.25)"
+                : "rgba(124,58,237,0.15)"
+              : "transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            color: hasFile
+              ? isDark
+                ? "#a78bfa"
+                : "#7c3aed"
+              : isDark
+              ? "#8a8a9a"
+              : "#6b7280",
+          }}
+          title="Kirim berkas dokumen / file"
+        >
+          <Paperclip size={16} />
+        </button>
+      </div>
 
       <textarea
         ref={textareaRef}
         value={input}
         onChange={onInputChange}
         onKeyDown={onKeyDown}
-        placeholder={hasImage ? "Tambah keterangan gambar..." : "Ketik aja sob..."}
+        placeholder={
+          hasImage
+            ? "Tambah keterangan gambar..."
+            : hasFile
+            ? "Tambah keterangan berkas..."
+            : "Ketik aja sob..."
+        }
         rows={1}
         style={{
           flex: 1,
@@ -381,7 +529,7 @@ function NormalMode({
       <button
         type="button"
         onClick={onStartRecording}
-        disabled={isSendingAudio || hasImage}
+        disabled={isSendingAudio || hasAttachment}
         className="mic-btn"
         style={{
           flexShrink: 0,
@@ -390,7 +538,7 @@ function NormalMode({
           borderRadius: 12,
           background: t.micBtnBg,
           border: `1px solid ${t.micBtnBorder}`,
-          opacity: isSendingAudio || hasImage ? 0.5 : 1,
+          opacity: isSendingAudio || hasAttachment ? 0.5 : 1,
         }}
         title="Rekam pesan suara"
       >
@@ -429,7 +577,7 @@ function NormalMode({
           cursor: canSend ? "pointer" : "default",
         }}
       >
-        {isUploadingImage ? (
+        {isUploading ? (
           <div
             style={{
               width: 14,

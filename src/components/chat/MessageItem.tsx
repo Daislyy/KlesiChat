@@ -1,9 +1,10 @@
 import { Pencil, Trash2, Check } from "lucide-react";
 import type { Message } from "../../types/chat";
 import type { ChatTheme } from "../../lib/chatTheme";
-import { formatTime } from "../../lib/chatTheme"; // ← Perbaikan: import sebagai value, bukan type
+import { formatTime } from "../../lib/chatTheme";
 import Avatar from "./Avatar";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import FileAttachment from "./FileAttachment";
 
 interface MessageItemProps {
   msg: Message;
@@ -37,11 +38,14 @@ export default function MessageItem({
   onOpenMedia,
 }: MessageItemProps) {
   const isAudio = msg.type === "audio";
-  const hasImage = !!msg.media_url || msg.type === "image";
+  const hasImage = Boolean(msg.media_url || msg.type === "image");
+  const hasFile = Boolean(msg.file_url || msg.type === "file");
   const showCaption =
-    msg.content &&
+    Boolean(msg.content) &&
     msg.content.trim() !== "📷 Gambar" &&
-    msg.content.trim() !== "🎤 Pesan suara";
+    msg.content.trim() !== "🎤 Pesan suara" &&
+    msg.content.trim() !== "📁 Berkas" &&
+    msg.content.trim() !== msg.file_name;
 
   return (
     <div
@@ -109,6 +113,8 @@ export default function MessageItem({
                 padding: isAudio
                   ? "10px 12px"
                   : hasImage
+                  ? "6px"
+                  : hasFile
                   ? "6px"
                   : "10px 14px",
                 fontSize: 13,
@@ -178,6 +184,29 @@ export default function MessageItem({
                     </div>
                   )}
                 </div>
+              ) : hasFile && msg.file_url ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <FileAttachment
+                    fileName={msg.file_name || "Berkas"}
+                    fileSize={msg.file_size}
+                    fileType={msg.file_type}
+                    fileUrl={msg.file_url}
+                    isMe={isMe}
+                    isDark={isDark}
+                  />
+                  {showCaption && (
+                    <div
+                      style={{
+                        padding: "2px 8px 4px 8px",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: isMe ? t.outgoingMsgColor : t.incomingMsgColor,
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
               ) : (
                 msg.content
               )}
@@ -193,7 +222,7 @@ export default function MessageItem({
                   marginBottom: 2,
                 }}
               >
-                {!isAudio && !hasImage && (
+                {!isAudio && !hasImage && !hasFile && (
                   <button
                     className="action-btn"
                     title="Edit"

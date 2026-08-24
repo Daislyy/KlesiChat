@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle, Image as ImageIcon, Paperclip } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { getChatTheme } from "../lib/chatTheme";
@@ -8,6 +8,7 @@ import type { CurrentUser, DirectMessage } from "../types/chat";
 import Avatar from "../components/chat/Avatar";
 import VoiceMessagePlayer from "../components/chat/VoiceMessagePlayer";
 import MediaModal from "../components/chat/MediaModal";
+import FileAttachment, { formatFileSize } from "../components/chat/FileAttachment";
 
 export default function DMPage() {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -21,8 +22,11 @@ export default function DMPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [selectedMediaModal, setSelectedMediaModal] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const genericFileInputRef = useRef<HTMLInputElement>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark" || 
       (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -333,13 +337,69 @@ export default function DMPage() {
     }
   };
 
+  const handleSelectFile = (file: File) => {
+    setSelectedFile(file);
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+  };
+
+  const handleGenericFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 50 * 1024 * 1024) {
+        alert("Ukuran berkas maksimal 50 MB.");
+        return;
+      }
+      handleSelectFile(file);
+      e.target.value = "";
+    }
+  };
+
   async function handleSend() {
-    if ((!input.trim() && !selectedImage) || !currentUser || !otherUser) return;
+    if ((!input.trim() && !selectedImage && !selectedFile) || !currentUser || !otherUser) return;
     const content = input.trim();
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    if (selectedImage) {
+    if (selectedFile) {
+      setIsUploadingFile(true);
+      try {
+        const cleanName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${currentUser.id}/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("shared-files")
+          .upload(filePath, selectedFile, {
+            contentType: selectedFile.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("shared-files")
+          .getPublicUrl(filePath);
+
+        await supabase.from("direct_messages").insert({
+          content: content || selectedFile.name,
+          type: "file",
+          file_name: selectedFile.name,
+          file_size: selectedFile.size,
+          file_type: selectedFile.type || "application/octet-stream",
+          file_url: urlData.publicUrl,
+          sender_id: currentUser.id,
+          receiver_id: otherUser.id,
+        });
+
+        handleRemoveFile();
+        setTimeout(scrollToBottom, 80);
+      } catch (err) {
+        console.error(err);
+        alert("Gagal mengunggah berkas. Silakan coba lagi.");
+      } finally {
+        setIsUploadingFile(false);
+      }
+    } else if (selectedImage) {
       setIsUploadingImage(true);
       try {
         const cleanName = selectedImage.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -611,10 +671,13 @@ export default function DMPage() {
           const isMe = msg.sender_id === currentUser.id;
           const isNew = newMsgIds.has(msg.id);
           const hasImage = Boolean(msg.media_url || msg.type === "image");
+          const hasFile = Boolean(msg.file_url || msg.type === "file");
           const showCaption =
             Boolean(msg.content) &&
             msg.content.trim() !== "📷 Gambar" &&
-            msg.content.trim() !== "🎤 Pesan suara";
+            msg.content.trim() !== "🎤 Pesan suara" &&
+            msg.content.trim() !== "📁 Berkas" &&
+            msg.content.trim() !== msg.file_name;
           const msgClassName = isNew
             ? isMe
               ? "dm-msg-new-me"
@@ -645,7 +708,7 @@ export default function DMPage() {
               <div
                 style={{
                   maxWidth: "70%",
-                  padding: hasImage ? "6px" : "10px 14px",
+                  padding: hasImage || hasFile ? "6px" : "10px 14px",
                   borderRadius: isMe
                     ? "18px 18px 4px 18px"
                     : "18px 18px 18px 4px",
@@ -708,6 +771,28 @@ export default function DMPage() {
                       </div>
                     )}
                   </div>
+                ) : hasFile && msg.file_url ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <FileAttachment
+                      fileName={msg.file_name || "Berkas"}
+                      fileSize={msg.file_size}
+                      fileType={msg.file_type}
+                      fileUrl={msg.file_url}
+                      isMe={isMe}
+                      isDark={isDark}
+                    />
+                    {showCaption && (
+                      <div
+                        style={{
+                          padding: "2px 6px 4px 6px",
+                          fontSize: 13,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   msg.content
                 )}
@@ -756,6 +841,12 @@ export default function DMPage() {
           accept="image/*"
           style={{ display: "none" }}
           onChange={handleFileChange}
+        />
+        <input
+          type="file"
+          ref={genericFileInputRef}
+          style={{ display: "none" }}
+          onChange={handleGenericFileChange}
         />
 
         {/* Image Preview Banner */}
@@ -826,6 +917,75 @@ export default function DMPage() {
           </div>
         )}
 
+        {/* Generic File Preview Banner */}
+        {selectedFile && (
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 14,
+              background: isDark ? "rgba(40,40,48,0.9)" : "rgba(240,240,246,0.9)",
+              border: `1px solid ${isDark ? "#3f3f4e" : "#e2e2ec"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              maxWidth: 340,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 8,
+                  background: isDark ? "rgba(139,92,246,0.2)" : "rgba(124,58,237,0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Paperclip size={18} color={isDark ? "#a78bfa" : "#7c3aed"} />
+              </div>
+              <div style={{ overflow: "hidden" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: isDark ? "#e2e8f0" : "#111827",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {selectedFile.name}
+                </div>
+                <div style={{ fontSize: 10, color: isDark ? "#888899" : "#666677" }}>
+                  {formatFileSize(selectedFile.size)} • Siap dikirim
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleRemoveFile}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 6,
+                border: "none",
+                background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                color: isDark ? "#bbb" : "#555",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Batal kirim berkas"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           {isRecording ? (
             <div
@@ -882,40 +1042,77 @@ export default function DMPage() {
             </div>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingImage || isSendingAudio}
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 12,
-                  border: `1px solid ${t.headerBorder}`,
-                  background: selectedImage
-                    ? isDark
-                      ? "rgba(139,92,246,0.25)"
-                      : "rgba(124,58,237,0.15)"
-                    : isDark
-                    ? "#1e1e2e"
-                    : "#f3f4f6",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  color: selectedImage
-                    ? isDark
-                      ? "#a78bfa"
-                      : "#7c3aed"
-                    : isDark
-                    ? "#9ca3af"
-                    : "#6b7280",
-                  flexShrink: 0,
-                  transition: "all 0.2s ease",
-                }}
-                title="Kirim gambar"
-              >
-                <ImageIcon size={18} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage || isUploadingFile || isSendingAudio}
+                  style={{
+                    width: 38,
+                    height: 42,
+                    borderRadius: 12,
+                    border: `1px solid ${t.headerBorder}`,
+                    background: selectedImage
+                      ? isDark
+                        ? "rgba(139,92,246,0.25)"
+                        : "rgba(124,58,237,0.15)"
+                      : isDark
+                      ? "#1e1e2e"
+                      : "#f3f4f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: selectedImage
+                      ? isDark
+                        ? "#a78bfa"
+                        : "#7c3aed"
+                      : isDark
+                      ? "#9ca3af"
+                      : "#6b7280",
+                    flexShrink: 0,
+                    transition: "all 0.2s ease",
+                  }}
+                  title="Kirim gambar"
+                >
+                  <ImageIcon size={17} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => genericFileInputRef.current?.click()}
+                  disabled={isUploadingImage || isUploadingFile || isSendingAudio}
+                  style={{
+                    width: 38,
+                    height: 42,
+                    borderRadius: 12,
+                    border: `1px solid ${t.headerBorder}`,
+                    background: selectedFile
+                      ? isDark
+                        ? "rgba(139,92,246,0.25)"
+                        : "rgba(124,58,237,0.15)"
+                      : isDark
+                      ? "#1e1e2e"
+                      : "#f3f4f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: selectedFile
+                      ? isDark
+                        ? "#a78bfa"
+                        : "#7c3aed"
+                      : isDark
+                      ? "#9ca3af"
+                      : "#6b7280",
+                    flexShrink: 0,
+                    transition: "all 0.2s ease",
+                  }}
+                  title="Kirim berkas dokumen / file"
+                >
+                  <Paperclip size={17} />
+                </button>
+              </div>
 
               <textarea
                 ref={textareaRef}
@@ -935,6 +1132,8 @@ export default function DMPage() {
                 placeholder={
                   selectedImage
                     ? "Tambah keterangan gambar..."
+                    : selectedFile
+                    ? "Tambah keterangan berkas..."
                     : `Pesan ke ${otherUser.username}...`
                 }
                 style={{
@@ -957,7 +1156,7 @@ export default function DMPage() {
             </>
           )}
 
-          {!input.trim() && !selectedImage && !isSendingAudio && (
+          {!input.trim() && !selectedImage && !selectedFile && !isSendingAudio && (
             <button
               className={`dm-mic-btn${isRecording ? " recording" : ""}`}
               onClick={isRecording ? stopAndSendRecording : startRecording}
@@ -981,16 +1180,16 @@ export default function DMPage() {
             </button>
           )}
 
-          {(input.trim() || selectedImage || isSendingAudio) && !isRecording && (
+          {(input.trim() || selectedImage || selectedFile || isSendingAudio) && !isRecording && (
             <button
               className="dm-send-btn"
               onClick={handleSend}
-              disabled={(!input.trim() && !selectedImage) || isSendingAudio || isUploadingImage}
+              disabled={(!input.trim() && !selectedImage && !selectedFile) || isSendingAudio || isUploadingImage || isUploadingFile}
               style={{
                 width: 42,
                 height: 42,
                 borderRadius: 12,
-                background: input.trim() || selectedImage
+                background: input.trim() || selectedImage || selectedFile
                   ? "#7c3aed"
                   : isDark
                     ? "#2d2d3d"
@@ -999,10 +1198,10 @@ export default function DMPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
-                opacity: (!input.trim() && !selectedImage) || isUploadingImage ? 0.5 : 1,
+                opacity: (!input.trim() && !selectedImage && !selectedFile) || isUploadingImage || isUploadingFile ? 0.5 : 1,
               }}
             >
-              {isSendingAudio || isUploadingImage ? (
+              {isSendingAudio || isUploadingImage || isUploadingFile ? (
                 <div
                   style={{
                     width: 14,
@@ -1016,7 +1215,7 @@ export default function DMPage() {
               ) : (
                 <Send
                   size={16}
-                  color={input.trim() || selectedImage ? "#fff" : isDark ? "#4b5563" : "#9ca3af"}
+                  color={input.trim() || selectedImage || selectedFile ? "#fff" : isDark ? "#4b5563" : "#9ca3af"}
                 />
               )}
             </button>

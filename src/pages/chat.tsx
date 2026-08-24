@@ -36,6 +36,8 @@ export default function ChatPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [selectedMediaModal, setSelectedMediaModal] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark" || 
@@ -119,7 +121,7 @@ export default function ChatPage() {
       const { data: msgs } = await supabase
         .from("messages")
         .select(
-          "id,content,type,audio_url,audio_duration,media_url,media_type,user_id,created_at,profiles(username,avatar_url)",
+          "id,content,type,audio_url,audio_duration,media_url,media_type,file_name,file_size,file_type,file_url,user_id,created_at,profiles(username,avatar_url)",
         )
         .order("created_at", { ascending: true });
       if (msgs) {
@@ -127,11 +129,15 @@ export default function ChatPage() {
           msgs.map((m: any) => ({
             id: m.id,
             content: m.content,
-            type: m.type || (m.media_url ? "image" : "text"),
+            type: m.type || (m.media_url ? "image" : m.file_url ? "file" : "text"),
             audio_url: m.audio_url || undefined,
             audio_duration: m.audio_duration || undefined,
             media_url: m.media_url || undefined,
             media_type: m.media_type || undefined,
+            file_name: m.file_name || undefined,
+            file_size: m.file_size || undefined,
+            file_type: m.file_type || undefined,
+            file_url: m.file_url || undefined,
             user_id: m.user_id,
             created_at: m.created_at,
             username: m.profiles?.username || "unknown",
@@ -233,9 +239,13 @@ export default function ChatPage() {
               .single();
             const newMsg: Message = {
               ...(payload.new as any),
-              type: payload.new.type || (payload.new.media_url ? "image" : "text"),
+              type: payload.new.type || (payload.new.media_url ? "image" : payload.new.file_url ? "file" : "text"),
               media_url: payload.new.media_url || undefined,
               media_type: payload.new.media_type || undefined,
+              file_name: payload.new.file_name || undefined,
+              file_size: payload.new.file_size || undefined,
+              file_type: payload.new.file_type || undefined,
+              file_url: payload.new.file_url || undefined,
               username: p?.username || "unknown",
               avatar_url: p?.avatar_url || "",
             };
@@ -437,15 +447,57 @@ export default function ChatPage() {
     setImagePreviewUrl(null);
   };
 
+  const handleSelectFile = (file: File) => {
+    setSelectedFile(file);
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+  };
+
   async function handleSend() {
-    if ((!input.trim() && !selectedImage) || !currentUser) return;
+    if ((!input.trim() && !selectedImage && !selectedFile) || !currentUser) return;
     const content = input.trim();
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsNearBottom(true);
     setUnreadCount(0);
 
-    if (selectedImage) {
+    if (selectedFile) {
+      setIsUploadingFile(true);
+      try {
+        const cleanName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${currentUser.id}/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("shared-files")
+          .upload(filePath, selectedFile, {
+            contentType: selectedFile.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("shared-files")
+          .getPublicUrl(filePath);
+
+        await supabase.from("messages").insert({
+          content: content || selectedFile.name,
+          type: "file",
+          file_name: selectedFile.name,
+          file_size: selectedFile.size,
+          file_type: selectedFile.type || "application/octet-stream",
+          file_url: urlData.publicUrl,
+          user_id: currentUser.id,
+        });
+
+        handleRemoveFile();
+      } catch (err) {
+        console.error(err);
+        alert("Gagal mengunggah berkas. Silakan coba lagi.");
+      } finally {
+        setIsUploadingFile(false);
+      }
+    } else if (selectedImage) {
       setIsUploadingImage(true);
       try {
         const cleanName = selectedImage.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -870,6 +922,8 @@ export default function ChatPage() {
             selectedImage={selectedImage}
             imagePreviewUrl={imagePreviewUrl}
             isUploadingImage={isUploadingImage}
+            selectedFile={selectedFile}
+            isUploadingFile={isUploadingFile}
             isDark={isDark}
             t={t}
             textareaRef={textareaRef}
@@ -881,6 +935,8 @@ export default function ChatPage() {
             onCancelRecording={cancelRecording}
             onSelectImage={handleSelectImage}
             onRemoveImage={handleRemoveImage}
+            onSelectFile={handleSelectFile}
+            onRemoveFile={handleRemoveFile}
           />
         </main>
       </div>
