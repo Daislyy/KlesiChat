@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { getChatTheme } from "../lib/chatTheme";
@@ -7,6 +7,7 @@ import { playNotificationSound, unlockAudio } from "../lib/audioNotification";
 import type { CurrentUser, DirectMessage } from "../types/chat";
 import Avatar from "../components/chat/Avatar";
 import VoiceMessagePlayer from "../components/chat/VoiceMessagePlayer";
+import MediaModal from "../components/chat/MediaModal";
 
 export default function DMPage() {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -17,6 +18,11 @@ export default function DMPage() {
     username: string;
     avatar_url: string;
   } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [selectedMediaModal, setSelectedMediaModal] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark" || 
       (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -303,18 +309,79 @@ export default function DMPage() {
     audioChunksRef.current = [];
   }
 
+  const handleSelectImage = (file: File) => {
+    setSelectedImage(file);
+    const url = URL.createObjectURL(file);
+    setImagePreviewUrl(url);
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setSelectedImage(null);
+    setImagePreviewUrl(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith("image/")) {
+        alert("Pilih file gambar (JPG, PNG, GIF, WebP, dsb).");
+        return;
+      }
+      handleSelectImage(file);
+      e.target.value = "";
+    }
+  };
+
   async function handleSend() {
-    if (!input.trim() || !currentUser || !otherUser) return;
+    if ((!input.trim() && !selectedImage) || !currentUser || !otherUser) return;
     const content = input.trim();
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-    await supabase.from("direct_messages").insert({
-      content,
-      type: "text",
-      sender_id: currentUser.id,
-      receiver_id: otherUser.id,
-    });
-    setTimeout(scrollToBottom, 80);
+
+    if (selectedImage) {
+      setIsUploadingImage(true);
+      try {
+        const cleanName = selectedImage.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${currentUser.id}/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("chat-media")
+          .upload(filePath, selectedImage, {
+            contentType: selectedImage.type,
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("chat-media")
+          .getPublicUrl(filePath);
+
+        await supabase.from("direct_messages").insert({
+          content: content || "📷 Gambar",
+          type: "image",
+          media_url: urlData.publicUrl,
+          media_type: "image",
+          sender_id: currentUser.id,
+          receiver_id: otherUser.id,
+        });
+
+        handleRemoveImage();
+        setTimeout(scrollToBottom, 80);
+      } catch (err) {
+        console.error(err);
+        alert("Gagal mengunggah gambar. Silakan coba lagi.");
+      } finally {
+        setIsUploadingImage(false);
+      }
+    } else {
+      await supabase.from("direct_messages").insert({
+        content,
+        type: "text",
+        sender_id: currentUser.id,
+        receiver_id: otherUser.id,
+      });
+      setTimeout(scrollToBottom, 80);
+    }
   }
 
   const formatDur = (s: number) =>
@@ -543,6 +610,11 @@ export default function DMPage() {
         {messages.map((msg) => {
           const isMe = msg.sender_id === currentUser.id;
           const isNew = newMsgIds.has(msg.id);
+          const hasImage = Boolean(msg.media_url || msg.type === "image");
+          const showCaption =
+            Boolean(msg.content) &&
+            msg.content.trim() !== "📷 Gambar" &&
+            msg.content.trim() !== "🎤 Pesan suara";
           const msgClassName = isNew
             ? isMe
               ? "dm-msg-new-me"
@@ -573,7 +645,7 @@ export default function DMPage() {
               <div
                 style={{
                   maxWidth: "70%",
-                  padding: "10px 14px",
+                  padding: hasImage ? "6px" : "10px 14px",
                   borderRadius: isMe
                     ? "18px 18px 4px 18px"
                     : "18px 18px 18px 4px",
@@ -591,6 +663,51 @@ export default function DMPage() {
                     isMe={isMe}
                     isDark={isDark}
                   />
+                ) : hasImage && msg.media_url ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div
+                      onClick={() => setSelectedMediaModal(msg.media_url!)}
+                      style={{
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        cursor: "pointer",
+                        maxHeight: 280,
+                        maxWidth: 320,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: isDark ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <img
+                        src={msg.media_url}
+                        alt="Media"
+                        loading="lazy"
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          maxHeight: 280,
+                          objectFit: "cover",
+                          display: "block",
+                          borderRadius: 12,
+                          transition: "transform 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                      />
+                    </div>
+                    {showCaption && (
+                      <div
+                        style={{
+                          padding: "2px 6px 4px 6px",
+                          fontSize: 13,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   msg.content
                 )}
@@ -629,163 +746,289 @@ export default function DMPage() {
           background: t.headerBg,
           borderTop: `1px solid ${t.headerBorder}`,
           display: "flex",
+          flexDirection: "column",
           gap: 8,
-          alignItems: "flex-end",
         }}
       >
-        {isRecording ? (
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+
+        {/* Image Preview Banner */}
+        {imagePreviewUrl && (
           <div
             style={{
-              flex: 1,
+              padding: "8px 12px",
+              borderRadius: 14,
+              background: isDark ? "rgba(40,40,48,0.9)" : "rgba(240,240,246,0.9)",
+              border: `1px solid ${isDark ? "#3f3f4e" : "#e2e2ec"}`,
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              padding: "0 4px",
+              justifyContent: "space-between",
+              gap: 12,
+              maxWidth: 340,
             }}
           >
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "#ef4444",
-                animation: "recPulse 1s ease-in-out infinite",
-                flexShrink: 0,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 13,
-                color: isDark ? "#e2e8f0" : "#111827",
-                fontVariantNumeric: "tabular-nums",
-                fontFamily: "'DM Mono',monospace",
-              }}
-            >
-              {formatDur(recordingDuration)}
-            </span>
-            <span
-              style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}
-            >
-              Merekam...
-            </span>
-            <div style={{ flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+              <img
+                src={imagePreviewUrl}
+                alt="Preview"
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 8,
+                  objectFit: "cover",
+                  border: `1px solid ${isDark ? "#4f4f60" : "#d0d0dc"}`,
+                }}
+              />
+              <div style={{ overflow: "hidden" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: isDark ? "#e2e8f0" : "#111827",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {selectedImage?.name || "Gambar"}
+                </div>
+                <div style={{ fontSize: 10, color: isDark ? "#888899" : "#666677" }}>
+                  {selectedImage
+                    ? `${(selectedImage.size / 1024).toFixed(1)} KB`
+                    : "Siap dikirim"}
+                </div>
+              </div>
+            </div>
             <button
-              onClick={cancelRecording}
+              onClick={handleRemoveImage}
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
-                border: `1px solid ${t.headerBorder}`,
-                background: isDark ? "#1e1e2e" : "#f3f4f6",
+                width: 26,
+                height: 26,
+                borderRadius: 6,
+                border: "none",
+                background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                color: isDark ? "#bbb" : "#555",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
+              title="Batal kirim gambar"
             >
-              <X size={14} color={isDark ? "#9ca3af" : "#6b7280"} />
+              <X size={14} />
             </button>
           </div>
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height =
-                Math.min(e.target.scrollHeight, 120) + "px";
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder={`Pesan ke ${otherUser.username}...`}
-            style={{
-              flex: 1,
-              resize: "none",
-              border: `1px solid ${t.headerBorder}`,
-              borderRadius: 12,
-              padding: "10px 14px",
-              fontSize: 14,
-              fontFamily: "'DM Sans',sans-serif",
-              background: t.msgAreaBg,
-              color: isDark ? "#e2e8f0" : "#111827",
-              outline: "none",
-              minHeight: 42,
-              maxHeight: 120,
-              lineHeight: 1.5,
-            }}
-            rows={1}
-          />
         )}
 
-        {!input.trim() && !isSendingAudio && (
-          <button
-            className={`dm-mic-btn${isRecording ? " recording" : ""}`}
-            onClick={isRecording ? stopAndSendRecording : startRecording}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: isRecording
-                ? "#ef4444"
-                : isDark
-                  ? "#1e1e2e"
-                  : "#f3f4f6",
-              border: `1px solid ${isRecording ? "#ef4444" : t.headerBorder}`,
-            }}
-          >
-            {isRecording ? (
-              <StopCircle size={16} color="#fff" />
-            ) : (
-              <Mic size={16} color={isDark ? "#8b5cf6" : "#7c3aed"} />
-            )}
-          </button>
-        )}
-
-        {(input.trim() || isSendingAudio) && (
-          <button
-            className="dm-send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || isSendingAudio}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: input.trim()
-                ? "#7c3aed"
-                : isDark
-                  ? "#2d2d3d"
-                  : "#e5e7eb",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            {isSendingAudio ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          {isRecording ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "0 4px",
+              }}
+            >
               <div
                 style={{
-                  width: 14,
-                  height: 14,
+                  width: 8,
+                  height: 8,
                   borderRadius: "50%",
-                  border: "2px solid #fff",
-                  borderTop: "2px solid transparent",
-                  animation: "spin 0.8s linear infinite",
+                  background: "#ef4444",
+                  animation: "recPulse 1s ease-in-out infinite",
+                  flexShrink: 0,
                 }}
               />
-            ) : (
-              <Send
-                size={16}
-                color={input.trim() ? "#fff" : isDark ? "#4b5563" : "#9ca3af"}
+              <span
+                style={{
+                  fontSize: 13,
+                  color: isDark ? "#e2e8f0" : "#111827",
+                  fontVariantNumeric: "tabular-nums",
+                  fontFamily: "'DM Mono',monospace",
+                }}
+              >
+                {formatDur(recordingDuration)}
+              </span>
+              <span
+                style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}
+              >
+                Merekam...
+              </span>
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={cancelRecording}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  border: `1px solid ${t.headerBorder}`,
+                  background: isDark ? "#1e1e2e" : "#f3f4f6",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={14} color={isDark ? "#9ca3af" : "#6b7280"} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingImage || isSendingAudio}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  border: `1px solid ${t.headerBorder}`,
+                  background: selectedImage
+                    ? isDark
+                      ? "rgba(139,92,246,0.25)"
+                      : "rgba(124,58,237,0.15)"
+                    : isDark
+                    ? "#1e1e2e"
+                    : "#f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: selectedImage
+                    ? isDark
+                      ? "#a78bfa"
+                      : "#7c3aed"
+                    : isDark
+                    ? "#9ca3af"
+                    : "#6b7280",
+                  flexShrink: 0,
+                  transition: "all 0.2s ease",
+                }}
+                title="Kirim gambar"
+              >
+                <ImageIcon size={18} />
+              </button>
+
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height =
+                    Math.min(e.target.scrollHeight, 120) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder={
+                  selectedImage
+                    ? "Tambah keterangan gambar..."
+                    : `Pesan ke ${otherUser.username}...`
+                }
+                style={{
+                  flex: 1,
+                  resize: "none",
+                  border: `1px solid ${t.headerBorder}`,
+                  borderRadius: 12,
+                  padding: "10px 14px",
+                  fontSize: 14,
+                  fontFamily: "'DM Sans',sans-serif",
+                  background: t.msgAreaBg,
+                  color: isDark ? "#e2e8f0" : "#111827",
+                  outline: "none",
+                  minHeight: 42,
+                  maxHeight: 120,
+                  lineHeight: 1.5,
+                }}
+                rows={1}
               />
-            )}
-          </button>
-        )}
+            </>
+          )}
+
+          {!input.trim() && !selectedImage && !isSendingAudio && (
+            <button
+              className={`dm-mic-btn${isRecording ? " recording" : ""}`}
+              onClick={isRecording ? stopAndSendRecording : startRecording}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                background: isRecording
+                  ? "#ef4444"
+                  : isDark
+                    ? "#1e1e2e"
+                    : "#f3f4f6",
+                border: `1px solid ${isRecording ? "#ef4444" : t.headerBorder}`,
+              }}
+            >
+              {isRecording ? (
+                <StopCircle size={16} color="#fff" />
+              ) : (
+                <Mic size={16} color={isDark ? "#8b5cf6" : "#7c3aed"} />
+              )}
+            </button>
+          )}
+
+          {(input.trim() || selectedImage || isSendingAudio) && !isRecording && (
+            <button
+              className="dm-send-btn"
+              onClick={handleSend}
+              disabled={(!input.trim() && !selectedImage) || isSendingAudio || isUploadingImage}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                background: input.trim() || selectedImage
+                  ? "#7c3aed"
+                  : isDark
+                    ? "#2d2d3d"
+                    : "#e5e7eb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                opacity: (!input.trim() && !selectedImage) || isUploadingImage ? 0.5 : 1,
+              }}
+            >
+              {isSendingAudio || isUploadingImage ? (
+                <div
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    border: "2px solid #fff",
+                    borderTop: "2px solid transparent",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+              ) : (
+                <Send
+                  size={16}
+                  color={input.trim() || selectedImage ? "#fff" : isDark ? "#4b5563" : "#9ca3af"}
+                />
+              )}
+            </button>
+          )}
+        </div>
       </div>
+
+      <MediaModal
+        isOpen={!!selectedMediaModal}
+        imageUrl={selectedMediaModal}
+        onClose={() => setSelectedMediaModal(null)}
+      />
     </motion.div>
   );
 }

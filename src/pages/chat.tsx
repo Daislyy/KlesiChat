@@ -18,6 +18,7 @@ import ChannelBar from "../components/chat/ChannelBar";
 import MessageItem from "../components/chat/MessageItem";
 import TypingIndicator from "../components/chat/TypingIndicator";
 import InputArea from "../components/chat/InputArea";
+import MediaModal from "../components/chat/MediaModal";
 
 const SCROLL_THRESHOLD = 120;
 
@@ -32,6 +33,10 @@ export default function ChatPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [selectedMediaModal, setSelectedMediaModal] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark" || 
       (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -114,7 +119,7 @@ export default function ChatPage() {
       const { data: msgs } = await supabase
         .from("messages")
         .select(
-          "id,content,type,audio_url,audio_duration,user_id,created_at,profiles(username,avatar_url)",
+          "id,content,type,audio_url,audio_duration,media_url,media_type,user_id,created_at,profiles(username,avatar_url)",
         )
         .order("created_at", { ascending: true });
       if (msgs) {
@@ -122,9 +127,11 @@ export default function ChatPage() {
           msgs.map((m: any) => ({
             id: m.id,
             content: m.content,
-            type: m.type || "text",
+            type: m.type || (m.media_url ? "image" : "text"),
             audio_url: m.audio_url || undefined,
             audio_duration: m.audio_duration || undefined,
+            media_url: m.media_url || undefined,
+            media_type: m.media_type || undefined,
             user_id: m.user_id,
             created_at: m.created_at,
             username: m.profiles?.username || "unknown",
@@ -226,7 +233,9 @@ export default function ChatPage() {
               .single();
             const newMsg: Message = {
               ...(payload.new as any),
-              type: payload.new.type || "text",
+              type: payload.new.type || (payload.new.media_url ? "image" : "text"),
+              media_url: payload.new.media_url || undefined,
+              media_type: payload.new.media_type || undefined,
               username: p?.username || "unknown",
               avatar_url: p?.avatar_url || "",
             };
@@ -416,16 +425,63 @@ export default function ChatPage() {
     audioChunksRef.current = [];
   }
 
+  const handleSelectImage = (file: File) => {
+    setSelectedImage(file);
+    const url = URL.createObjectURL(file);
+    setImagePreviewUrl(url);
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setSelectedImage(null);
+    setImagePreviewUrl(null);
+  };
+
   async function handleSend() {
-    if (!input.trim() || !currentUser) return;
+    if ((!input.trim() && !selectedImage) || !currentUser) return;
     const content = input.trim();
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsNearBottom(true);
     setUnreadCount(0);
-    await supabase
-      .from("messages")
-      .insert({ content, type: "text", user_id: currentUser.id });
+
+    if (selectedImage) {
+      setIsUploadingImage(true);
+      try {
+        const cleanName = selectedImage.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${currentUser.id}/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("chat-media")
+          .upload(filePath, selectedImage, {
+            contentType: selectedImage.type,
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("chat-media")
+          .getPublicUrl(filePath);
+
+        await supabase.from("messages").insert({
+          content: content || "📷 Gambar",
+          type: "image",
+          media_url: urlData.publicUrl,
+          media_type: "image",
+          user_id: currentUser.id,
+        });
+
+        handleRemoveImage();
+      } catch (err) {
+        console.error(err);
+        alert("Gagal mengunggah gambar. Silakan coba lagi.");
+      } finally {
+        setIsUploadingImage(false);
+      }
+    } else {
+      await supabase
+        .from("messages")
+        .insert({ content, type: "text", user_id: currentUser.id });
+    }
   }
 
   async function handleDelete(id: string) {
@@ -761,6 +817,7 @@ export default function ChatPage() {
                     setEditText("");
                   }}
                   onDelete={handleDelete}
+                  onOpenMedia={(url) => setSelectedMediaModal(url)}
                 />
               ))}
               <TypingIndicator
@@ -810,6 +867,9 @@ export default function ChatPage() {
             isRecording={isRecording}
             recordingDuration={recordingDuration}
             isSendingAudio={isSendingAudio}
+            selectedImage={selectedImage}
+            imagePreviewUrl={imagePreviewUrl}
+            isUploadingImage={isUploadingImage}
             isDark={isDark}
             t={t}
             textareaRef={textareaRef}
@@ -819,9 +879,17 @@ export default function ChatPage() {
             onStartRecording={startRecording}
             onStopAndSendRecording={stopAndSendRecording}
             onCancelRecording={cancelRecording}
+            onSelectImage={handleSelectImage}
+            onRemoveImage={handleRemoveImage}
           />
         </main>
       </div>
+
+      <MediaModal
+        isOpen={!!selectedMediaModal}
+        imageUrl={selectedMediaModal}
+        onClose={() => setSelectedMediaModal(null)}
+      />
     </motion.div>
   );
 }

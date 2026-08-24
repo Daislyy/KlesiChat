@@ -18,6 +18,7 @@ interface MessageItemProps {
   onEditSave: (id: string) => void;
   onEditCancel: () => void;
   onDelete: (id: string) => void;
+  onOpenMedia?: (url: string) => void;
 }
 
 export default function MessageItem({
@@ -33,8 +34,14 @@ export default function MessageItem({
   onEditSave,
   onEditCancel,
   onDelete,
+  onOpenMedia,
 }: MessageItemProps) {
   const isAudio = msg.type === "audio";
+  const hasImage = !!msg.media_url || msg.type === "image";
+  const showCaption =
+    msg.content &&
+    msg.content.trim() !== "📷 Gambar" &&
+    msg.content.trim() !== "🎤 Pesan suara";
 
   return (
     <div
@@ -99,7 +106,11 @@ export default function MessageItem({
           >
             <div
               style={{
-                padding: isAudio ? "10px 12px" : "10px 14px",
+                padding: isAudio
+                  ? "10px 12px"
+                  : hasImage
+                  ? "6px"
+                  : "10px 14px",
                 fontSize: 13,
                 lineHeight: 1.6,
                 wordBreak: "break-word",
@@ -111,6 +122,7 @@ export default function MessageItem({
                   : "18px 18px 18px 4px",
                 boxShadow: isMe ? t.outgoingMsgShadow : t.incomingMsgShadow,
                 maxWidth: "100%",
+                overflow: "hidden",
               }}
             >
               {isAudio && msg.audio_url ? (
@@ -120,6 +132,52 @@ export default function MessageItem({
                   isMe={isMe}
                   isDark={isDark}
                 />
+              ) : hasImage && msg.media_url ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div
+                    onClick={() => onOpenMedia && onOpenMedia(msg.media_url!)}
+                    style={{
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      cursor: "pointer",
+                      maxHeight: 280,
+                      maxWidth: 320,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: isDark ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.05)",
+                    }}
+                  >
+                    <img
+                      src={msg.media_url}
+                      alt="Media"
+                      loading="lazy"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        maxHeight: 280,
+                        objectFit: "cover",
+                        display: "block",
+                        borderRadius: 12,
+                        transition: "transform 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                    />
+                  </div>
+                  {showCaption && (
+                    <div
+                      style={{
+                        padding: "2px 8px 4px 8px",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: isMe ? t.outgoingMsgColor : t.incomingMsgColor,
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
               ) : (
                 msg.content
               )}
@@ -135,7 +193,7 @@ export default function MessageItem({
                   marginBottom: 2,
                 }}
               >
-                {!isAudio && (
+                {!isAudio && !hasImage && (
                   <button
                     className="action-btn"
                     title="Edit"

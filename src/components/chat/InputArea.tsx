@@ -1,4 +1,5 @@
-import { Send, X, Mic } from "lucide-react";
+import { useRef } from "react";
+import { Send, X, Mic, Image as ImageIcon } from "lucide-react";
 import type { ChatTheme } from "../../lib/chatTheme";
 import { formatDuration } from "../../lib/chatTheme";
 
@@ -7,6 +8,9 @@ interface InputAreaProps {
   isRecording: boolean;
   recordingDuration: number;
   isSendingAudio: boolean;
+  selectedImage: File | null;
+  imagePreviewUrl: string | null;
+  isUploadingImage: boolean;
   isDark: boolean;
   t: ChatTheme;
   onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -15,29 +19,140 @@ interface InputAreaProps {
   onStartRecording: () => void;
   onStopAndSendRecording: () => void;
   onCancelRecording: () => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>; // ← Perbaiki tipe ini
+  onSelectImage: (file: File) => void;
+  onRemoveImage: () => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
 export default function InputArea({
-  input, isRecording, recordingDuration, isSendingAudio,
-  isDark, t,
-  onInputChange, onKeyDown, onSend,
-  onStartRecording, onStopAndSendRecording, onCancelRecording,
+  input,
+  isRecording,
+  recordingDuration,
+  isSendingAudio,
+  selectedImage,
+  imagePreviewUrl,
+  isUploadingImage,
+  isDark,
+  t,
+  onInputChange,
+  onKeyDown,
+  onSend,
+  onStartRecording,
+  onStopAndSendRecording,
+  onCancelRecording,
+  onSelectImage,
+  onRemoveImage,
   textareaRef,
 }: InputAreaProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith("image/")) {
+        alert("Pilih file gambar (JPG, PNG, GIF, WebP, dsb).");
+        return;
+      }
+      onSelectImage(file);
+      e.target.value = "";
+    }
+  };
+
   return (
-    <div style={{
-      padding: "12px 16px",
-      background: t.inputAreaBg,
-      borderTop: `1px solid ${t.inputAreaBorder}`,
-      flexShrink: 0,
-      boxShadow: isDark ? "none" : "0 -1px 0 rgba(0,0,0,0.04)",
-    }}>
+    <div
+      style={{
+        padding: "12px 16px",
+        background: t.inputAreaBg,
+        borderTop: `1px solid ${t.inputAreaBorder}`,
+        flexShrink: 0,
+        boxShadow: isDark ? "none" : "0 -1px 0 rgba(0,0,0,0.04)",
+      }}
+    >
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      {/* Image Preview Banner */}
+      {imagePreviewUrl && (
+        <div
+          style={{
+            marginBottom: 8,
+            padding: "8px 12px",
+            borderRadius: 14,
+            background: isDark ? "rgba(40,40,48,0.9)" : "rgba(240,240,246,0.9)",
+            border: `1px solid ${isDark ? "#3f3f4e" : "#e2e2ec"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            maxWidth: 340,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+            <img
+              src={imagePreviewUrl}
+              alt="Preview"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 8,
+                objectFit: "cover",
+                border: `1px solid ${isDark ? "#4f4f60" : "#d0d0dc"}`,
+              }}
+            />
+            <div style={{ overflow: "hidden" }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: t.inputColor,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {selectedImage?.name || "Gambar terpilih"}
+              </div>
+              <div style={{ fontSize: 10, color: isDark ? "#888899" : "#666677" }}>
+                {selectedImage
+                  ? `${(selectedImage.size / 1024).toFixed(1)} KB`
+                  : "Siap dikirim"}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onRemoveImage}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: "none",
+              background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+              color: isDark ? "#bbb" : "#555",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="Batal kirim gambar"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div
         className="input-wrap"
         style={{
-          display: "flex", alignItems: "flex-end", gap: 8,
-          borderRadius: 16, padding: "8px 8px 8px 12px",
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 8,
+          borderRadius: 16,
+          padding: "8px 8px 8px 12px",
           background: t.inputWrapBg,
           border: `1px solid ${isRecording ? "#ef4444" : t.inputWrapBorder}`,
         }}
@@ -54,6 +169,8 @@ export default function InputArea({
           <NormalMode
             input={input}
             isSendingAudio={isSendingAudio}
+            hasImage={!!selectedImage}
+            isUploadingImage={isUploadingImage}
             isDark={isDark}
             t={t}
             textareaRef={textareaRef}
@@ -61,15 +178,20 @@ export default function InputArea({
             onKeyDown={onKeyDown}
             onSend={onSend}
             onStartRecording={onStartRecording}
+            onOpenImagePicker={() => fileInputRef.current?.click()}
           />
         )}
       </div>
 
-      <p style={{
-        fontSize: 10, color: t.creditColor,
-        marginTop: 6, paddingLeft: 4,
-        fontFamily: "'DM Mono',monospace",
-      }}>
+      <p
+        style={{
+          fontSize: 10,
+          color: t.creditColor,
+          marginTop: 6,
+          paddingLeft: 4,
+          fontFamily: "'DM Mono',monospace",
+        }}
+      >
         Deslyy : Mff kalo masih banyak Bug :))))
       </p>
     </div>
@@ -85,30 +207,61 @@ interface RecordingModeProps {
   onSend: () => void;
 }
 
-function RecordingMode({ recordingDuration, isDark, t, onCancel, onSend }: RecordingModeProps) {
+function RecordingMode({
+  recordingDuration,
+  isDark,
+  t,
+  onCancel,
+  onSend,
+}: RecordingModeProps) {
   return (
     <>
       <button
         onClick={onCancel}
         style={{
-          flexShrink: 0, width: 32, height: 32, borderRadius: 8,
-          border: "none", cursor: "pointer", background: "transparent",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          border: "none",
+          cursor: "pointer",
+          background: "transparent",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
         title="Batalkan rekaman"
       >
         <X size={15} color={isDark ? "#6b7280" : "#9ca3af"} />
       </button>
 
-      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: "50%", background: "#ef4444",
-          flexShrink: 0, animation: "recPulse 1s ease-in-out infinite",
-        }} />
-        <span style={{
-          fontSize: 13, color: isDark ? "#e2e8f0" : "#111827",
-          fontFamily: "'DM Mono',monospace", letterSpacing: "0.05em",
-        }}>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 0",
+        }}
+      >
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: "#ef4444",
+            flexShrink: 0,
+            animation: "recPulse 1s ease-in-out infinite",
+          }}
+        />
+        <span
+          style={{
+            fontSize: 13,
+            color: isDark ? "#e2e8f0" : "#111827",
+            fontFamily: "'DM Mono',monospace",
+            letterSpacing: "0.05em",
+          }}
+        >
           {formatDuration(recordingDuration)}
         </span>
         <span style={{ fontSize: 12, color: isDark ? "#4b5563" : "#9ca3af" }}>
@@ -120,8 +273,12 @@ function RecordingMode({ recordingDuration, isDark, t, onCancel, onSend }: Recor
         onClick={onSend}
         className="mic-btn is-recording"
         style={{
-          flexShrink: 0, width: 36, height: 36, borderRadius: 10,
-          background: t.micActiveBg, boxShadow: t.micActiveShadow,
+          flexShrink: 0,
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: t.micActiveBg,
+          boxShadow: t.micActiveShadow,
         }}
         title="Kirim pesan suara"
       >
@@ -135,6 +292,8 @@ function RecordingMode({ recordingDuration, isDark, t, onCancel, onSend }: Recor
 interface NormalModeProps {
   input: string;
   isSendingAudio: boolean;
+  hasImage: boolean;
+  isUploadingImage: boolean;
   isDark: boolean;
   t: ChatTheme;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -142,65 +301,151 @@ interface NormalModeProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
   onStartRecording: () => void;
+  onOpenImagePicker: () => void;
 }
 
 function NormalMode({
-  input, isSendingAudio, isDark, t,
-  textareaRef, onInputChange, onKeyDown, onSend, onStartRecording,
+  input,
+  isSendingAudio,
+  hasImage,
+  isUploadingImage,
+  isDark,
+  t,
+  textareaRef,
+  onInputChange,
+  onKeyDown,
+  onSend,
+  onStartRecording,
+  onOpenImagePicker,
 }: NormalModeProps) {
+  const canSend = (input.trim().length > 0 || hasImage) && !isUploadingImage;
+
   return (
     <>
+      <button
+        type="button"
+        onClick={onOpenImagePicker}
+        disabled={isUploadingImage || isSendingAudio}
+        style={{
+          flexShrink: 0,
+          width: 34,
+          height: 34,
+          borderRadius: 10,
+          border: "none",
+          background: hasImage
+            ? isDark
+              ? "rgba(139,92,246,0.25)"
+              : "rgba(124,58,237,0.15)"
+            : "transparent",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          color: hasImage
+            ? isDark
+              ? "#a78bfa"
+              : "#7c3aed"
+            : isDark
+            ? "#8a8a9a"
+            : "#6b7280",
+        }}
+        title="Kirim gambar"
+      >
+        <ImageIcon size={17} />
+      </button>
+
       <textarea
         ref={textareaRef}
         value={input}
         onChange={onInputChange}
         onKeyDown={onKeyDown}
-        placeholder="Ketik aja sob..."
+        placeholder={hasImage ? "Tambah keterangan gambar..." : "Ketik aja sob..."}
         rows={1}
         style={{
-          flex: 1, background: "transparent", border: "none", outline: "none",
-          color: t.inputColor, fontSize: 13, resize: "none",
-          padding: "6px 0 6px 4px", maxHeight: 120, caretColor: t.inputCaret,
-          fontFamily: "'DM Sans',sans-serif", lineHeight: 1.6,
+          flex: 1,
+          background: "transparent",
+          border: "none",
+          outline: "none",
+          color: t.inputColor,
+          fontSize: 13,
+          resize: "none",
+          padding: "6px 0 6px 4px",
+          maxHeight: 120,
+          caretColor: t.inputCaret,
+          fontFamily: "'DM Sans',sans-serif",
+          lineHeight: 1.6,
         }}
       />
 
       <button
+        type="button"
         onClick={onStartRecording}
-        disabled={isSendingAudio}
+        disabled={isSendingAudio || hasImage}
         className="mic-btn"
         style={{
-          flexShrink: 0, width: 36, height: 36, borderRadius: 12,
-          background: t.micBtnBg, border: `1px solid ${t.micBtnBorder}`,
-          opacity: isSendingAudio ? 0.5 : 1,
+          flexShrink: 0,
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          background: t.micBtnBg,
+          border: `1px solid ${t.micBtnBorder}`,
+          opacity: isSendingAudio || hasImage ? 0.5 : 1,
         }}
         title="Rekam pesan suara"
       >
         {isSendingAudio ? (
-          <div style={{
-            width: 14, height: 14, borderRadius: "50%",
-            border: `2px solid ${t.micBtnColor}33`,
-            borderTop: `2px solid ${t.micBtnColor}`,
-            animation: "spin 0.8s linear infinite",
-          }} />
+          <div
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              border: `2px solid ${t.micBtnColor}33`,
+              borderTop: `2px solid ${t.micBtnColor}`,
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
         ) : (
           <Mic size={15} color={t.micBtnColor} />
         )}
       </button>
 
       <button
+        type="button"
         onClick={onSend}
-        disabled={!input.trim()}
+        disabled={!canSend}
         className="send-btn"
         style={{
-          flexShrink: 0, width: 36, height: 36, borderRadius: 12,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: input.trim() ? t.sendBtnActiveBg : t.sendBtnInactiveBg,
-          boxShadow: input.trim() ? t.sendBtnActiveShadow : "none",
-          opacity: input.trim() ? 1 : 0.4,
+          flexShrink: 0,
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: canSend ? t.sendBtnActiveBg : t.sendBtnInactiveBg,
+          boxShadow: canSend ? t.sendBtnActiveShadow : "none",
+          opacity: canSend ? 1 : 0.4,
+          cursor: canSend ? "pointer" : "default",
         }}
       >
-        <Send size={14} color={input.trim() ? "#fff" : isDark ? "#4b5563" : "#9ca3af"} />
+        {isUploadingImage ? (
+          <div
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              border: "2px solid #fff",
+              borderTop: "2px solid transparent",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+        ) : (
+          <Send
+            size={14}
+            color={canSend ? "#fff" : isDark ? "#4b5563" : "#9ca3af"}
+          />
+        )}
       </button>
     </>
   );

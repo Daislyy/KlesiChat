@@ -281,11 +281,19 @@ export default function Register() {
         @keyframes spin{to{transform:rotate(360deg);}}
         @keyframes orbitRotate{from{transform:rotate(0deg) translateX(80px) rotate(0deg);}to{transform:rotate(360deg) translateX(80px) rotate(-360deg);}}
         @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-4px);opacity:1;}}
-        .login-input{width:100%;box-sizing:border-box;padding:12px 16px 12px 40px;border-radius:12px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:all 0.25s cubic-bezier(0.4,0,0.2,1);}
-        .login-input::placeholder{color:${t.subtitleColor};opacity:0.7;}
+        .login-input{width:100%;box-sizing:border-box;padding:12px 16px 12px 40px;border-radius:12px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:all 0.35s cubic-bezier(0.4,0,0.2,1);}
+        .login-input::placeholder{color:${t.subtitleColor};opacity:0.7;transition:opacity 0.3s;}
+        .login-input:focus::placeholder{opacity:0.4;}
         .orbit-dot{position:absolute;width:8px;height:8px;border-radius:50%;animation:orbitRotate 12s linear infinite;}
         .orbit-dot-2{animation:orbitRotate 18s linear infinite reverse;}
         .typing-dot{width:5px;height:5px;border-radius:50%;display:inline-block;animation:typingBounce 1.2s ease-in-out infinite;}
+        @keyframes shimmerBtn{0%{background-position:-200% center;}100%{background-position:200% center;}}
+        @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(120,120,160,0.15);}70%{box-shadow:0 0 0 8px rgba(120,120,160,0);}100%{box-shadow:0 0 0 0 rgba(120,120,160,0);}}
+        @keyframes fadeSlideUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+        .field-group{animation:fadeSlideUp 0.4s ease both;}
+        .field-label{transition:all 0.3s cubic-bezier(0.4,0,0.2,1);display:block;font-size:13px;font-weight:600;margin-bottom:7px;}
+        .card-hover{transition:transform 0.4s cubic-bezier(0.4,0,0.2,1),box-shadow 0.4s cubic-bezier(0.4,0,0.2,1);}
+        .card-hover:hover{transform:translateY(-4px);box-shadow:${isDark ? "0 40px 90px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)" : "0 40px 90px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.05)"};}
         @media(max-width:768px){.md-hidden{display:none !important;}}
         @media(min-width:769px){.md-show{display:none !important;}}
       `}</style>
@@ -633,6 +641,7 @@ export default function Register() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
+          className="card-hover"
           style={{
             width: "100%",
             maxWidth: 420,
@@ -641,7 +650,7 @@ export default function Register() {
             borderRadius: 24,
             padding: "36px 36px 32px",
             boxShadow: t.cardShadow,
-            transition: "background 0.4s, border-color 0.4s, box-shadow 0.4s",
+            transition: "background 0.4s, border-color 0.4s",
           }}
         >
           {/* Mobile logo */}
@@ -794,18 +803,18 @@ export default function Register() {
 
             <form onSubmit={handleSubmit}>
               {/* Username */}
-              <motion.div variants={staggerItem} style={{ marginBottom: 14 }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: t.labelColor,
-                    marginBottom: 7,
+              <motion.div variants={staggerItem} className="field-group" style={{ marginBottom: 14 }}>
+                <motion.label
+                  animate={{
+                    color: focusedField === "username" ? (isDark ? "#b0b0c8" : "#3a3a5e") : t.labelColor,
+                    x: focusedField === "username" ? 4 : 0,
                   }}
+                  transition={{ duration: 0.25 }}
+                  className="field-label"
+                  style={{ color: t.labelColor }}
                 >
                   Username
-                </label>
+                </motion.label>
                 <div style={{ position: "relative" }}>
                   <div
                     style={{
@@ -846,18 +855,18 @@ export default function Register() {
               </motion.div>
 
               {/* Email */}
-              <motion.div variants={staggerItem} style={{ marginBottom: 14 }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: t.labelColor,
-                    marginBottom: 7,
+              <motion.div variants={staggerItem} className="field-group" style={{ marginBottom: 14 }}>
+                <motion.label
+                  animate={{
+                    color: focusedField === "email" ? (isDark ? "#b0b0c8" : "#3a3a5e") : t.labelColor,
+                    x: focusedField === "email" ? 4 : 0,
                   }}
+                  transition={{ duration: 0.25 }}
+                  className="field-label"
+                  style={{ color: t.labelColor }}
                 >
                   Email
-                </label>
+                </motion.label>
                 <div style={{ position: "relative" }}>
                   <div
                     style={{
@@ -896,18 +905,18 @@ export default function Register() {
               </motion.div>
 
               {/* Password */}
-              <motion.div variants={staggerItem} style={{ marginBottom: 10 }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: t.labelColor,
-                    marginBottom: 7,
+              <motion.div variants={staggerItem} className="field-group" style={{ marginBottom: 10 }}>
+                <motion.label
+                  animate={{
+                    color: focusedField === "password" ? (isDark ? "#b0b0c8" : "#3a3a5e") : t.labelColor,
+                    x: focusedField === "password" ? 4 : 0,
                   }}
+                  transition={{ duration: 0.25 }}
+                  className="field-label"
+                  style={{ color: t.labelColor }}
                 >
                   Password
-                </label>
+                </motion.label>
                 <div style={{ position: "relative" }}>
                   <div
                     style={{
@@ -1065,7 +1074,10 @@ export default function Register() {
                   }}
                 >
                   {success ? (
-                    <span
+                    <motion.span
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 300 }}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1075,7 +1087,7 @@ export default function Register() {
                     >
                       <CheckCircle2 size={16} color={t.successColor} /> Register
                       Success
-                    </span>
+                    </motion.span>
                   ) : isLoading ? (
                     <span
                       style={{
@@ -1114,8 +1126,15 @@ export default function Register() {
                 margin: "22px 0",
               }}
             >
-              <div style={{ flex: 1, height: 1, background: t.dividerColor }} />
-              <span
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.6, duration: 0.5, ease: "easeOut" }}
+                style={{ flex: 1, height: 1, background: t.dividerColor, transformOrigin: "left" }}
+              />
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                 style={{
                   fontSize: 11,
                   color: t.dividerText,
@@ -1124,8 +1143,13 @@ export default function Register() {
                 }}
               >
                 Or
-              </span>
-              <div style={{ flex: 1, height: 1, background: t.dividerColor }} />
+              </motion.span>
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.6, duration: 0.5, ease: "easeOut" }}
+                style={{ flex: 1, height: 1, background: t.dividerColor, transformOrigin: "right" }}
+              />
             </motion.div>
 
             <motion.p

@@ -1,7 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { Sun, Moon, Send, Check, ArrowRight, MessageSquare, Mic, Contrast, User } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  Send,
+  Check,
+  ArrowRight,
+  MessageSquare,
+  Mic,
+  Contrast,
+  User,
+  Zap,
+  Sparkles,
+  Smartphone,
+  ChevronDown,
+  ShieldCheck,
+  HelpCircle,
+  Layers,
+  Radio,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import LOGO_SRC from "../assets/bee.png";
 
@@ -17,6 +35,7 @@ export default function Landing() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mockInput, setMockInput] = useState("");
   const [isBotTyping, setIsBotTyping] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mockMessages, setMockMessages] = useState([
     {
       id: "1",
@@ -35,7 +54,11 @@ export default function Landing() {
     },
   ]);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("theme", isDark ? "dark" : "light");
@@ -48,7 +71,10 @@ export default function Landing() {
   }, []);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
+    }
   }, [mockMessages, isBotTyping]);
 
   const handleSendMockMessage = (e: React.FormEvent) => {
@@ -533,8 +559,8 @@ export default function Landing() {
                   margin: "0 0 20px",
                 }}
               >
-                Ngobrol bareng, <br />
-                simpel dan nyaman.
+                KlesiChat Web, <br />
+                With React and Supabase.
               </motion.h1>
 
               <motion.p
@@ -547,9 +573,8 @@ export default function Landing() {
                   marginBottom: 32,
                 }}
               >
-                KlesiChat — platform chat pribadi dengan tampilan bersih, tema
-                gelap & terang, pesan suara, dan notifikasi real-time. Dibuat
-                buat ngobrol santai tanpa ribet.
+                KlesiChat adalah Platform Chat Publik dan Pribadi di buat
+                mengunakan React dan Supabase.
               </motion.p>
 
               <motion.div
@@ -782,6 +807,7 @@ export default function Landing() {
 
                 {/* Messages */}
                 <div
+                  ref={chatContainerRef}
                   style={{
                     flex: 1,
                     overflowY: "auto",
@@ -897,7 +923,6 @@ export default function Landing() {
                       </div>
                     </div>
                   )}
-                  <div ref={chatEndRef} />
                 </div>
 
                 {/* Input */}
@@ -962,6 +987,7 @@ export default function Landing() {
           </div>
 
           {/* ── Features Grid ── */}
+          {/* ── Features Grid (Yang Bisa Kamu Lakuin) ── */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1059,6 +1085,601 @@ export default function Landing() {
                   </p>
                 </motion.div>
               ))}
+            </div>
+          </motion.div>
+
+          {/* ── Section: Cara Kerja (How It Works) ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            style={{ marginTop: 24 }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: isDark ? "#fbbf24" : "#6b5ce7",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  background: isDark
+                    ? "rgba(251, 191, 36, 0.1)"
+                    : "rgba(107, 92, 231, 0.1)",
+                  padding: "4px 12px",
+                  borderRadius: 20,
+                  display: "inline-block",
+                  marginBottom: 12,
+                }}
+              >
+                Cara Kerja
+              </span>
+              <h3
+                style={{
+                  fontSize: "clamp(22px, 3.5vw, 30px)",
+                  fontWeight: 700,
+                  color: t.titleColor,
+                  margin: "0 0 10px",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Mulai Mengobrol Hanya Dalam 3 Langkah
+              </h3>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: t.subtitleColor,
+                  margin: 0,
+                  maxWidth: 520,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  lineHeight: 1.6,
+                }}
+              >
+                Simpel, cepat, dan tanpa konfigurasi rumit. Siapapun bisa langsung terhubung.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 20,
+              }}
+            >
+              {[
+                {
+                  step: "01",
+                  title: "Daftar Akun",
+                  desc: "Masukkan email dan kata sandi untuk membuat akun KlesiChat dalam beberapa detik.",
+                  icon: <User size={18} color={isDark ? "#60a5fa" : "#3b82f6"} />,
+                },
+                {
+                  step: "02",
+                  title: "Pilih Ruang & DM",
+                  desc: "Gabung ke obrolan publik bersama pengguna lain atau kirim pesan pribadi secara aman.",
+                  icon: <MessageSquare size={18} color={isDark ? "#fbbf24" : "#f59e0b"} />,
+                },
+                {
+                  step: "03",
+                  title: "Kirim Teks & Voice Note",
+                  desc: "Ketik obrolan atau gunakan mikrofon untuk merekam suara secara instan tanpa delay.",
+                  icon: <Mic size={18} color={isDark ? "#6fcf97" : "#10b981"} />,
+                },
+              ].map((item, idx) => (
+                <motion.div
+                  key={idx}
+                  whileHover={{ y: -4, borderColor: isDark ? "#4e4e5e" : "#c8c8d8" }}
+                  style={{
+                    background: t.cardBg,
+                    border: `1px solid ${t.cardBorder}`,
+                    borderRadius: 18,
+                    padding: "28px 24px",
+                    position: "relative",
+                    overflow: "hidden",
+                    boxShadow: t.cardShadow,
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 11,
+                        background: t.featureIconBg,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {item.icon}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 24,
+                        fontWeight: 800,
+                        color: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+                        letterSpacing: "-0.03em",
+                      }}
+                    >
+                      {item.step}
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: t.titleColor,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    {item.title}
+                  </h4>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: t.subtitleColor,
+                      lineHeight: 1.6,
+                      margin: 0,
+                    }}
+                  >
+                    {item.desc}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* ── Section: Keunggulan & Teknologi ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            style={{ marginTop: 24 }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: isDark ? "#6fcf97" : "#10b981",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  background: isDark
+                    ? "rgba(111, 207, 151, 0.1)"
+                    : "rgba(16, 185, 129, 0.1)",
+                  padding: "4px 12px",
+                  borderRadius: 20,
+                  display: "inline-block",
+                  marginBottom: 12,
+                }}
+              >
+                Keunggulan
+              </span>
+              <h3
+                style={{
+                  fontSize: "clamp(22px, 3.5vw, 30px)",
+                  fontWeight: 700,
+                  color: t.titleColor,
+                  margin: "0 0 10px",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Pengalaman Chatting Cepat & Responsif
+              </h3>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: t.subtitleColor,
+                  margin: 0,
+                  maxWidth: 540,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  lineHeight: 1.6,
+                }}
+              >
+                Dirancang untuk memberikan kenyamanan maksimal saat berkirim pesan.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 18,
+              }}
+            >
+              {[
+                {
+                  icon: <Zap size={18} color="#fbbf24" />,
+                  title: "Supabase Realtime Engine",
+                  desc: "Protokol websocket yang memungkinkan pesan masuk langsung tanpa delay.",
+                },
+                {
+                  icon: <Radio size={18} color="#60a5fa" />,
+                  title: "Voice Memo Terintegrasi",
+                  desc: "Rekam audio berdurasi fleksibel dengan kualitas jernih langsung di browser.",
+                },
+                {
+                  icon: <Smartphone size={18} color="#a78bfa" />,
+                  title: "Responsif di Semua Layar",
+                  desc: "Tampilan mulus dan nyaman digunakan baik di HP, tablet, maupun desktop.",
+                },
+                {
+                  icon: <Sparkles size={18} color="#f472b6" />,
+                  title: "Desain Modern & Smooth",
+                  desc: "Animasi interaktif dan transisi visual yang memanjakan mata.",
+                },
+              ].map((feat, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: t.cardBg,
+                    border: `1px solid ${t.cardBorder}`,
+                    borderRadius: 16,
+                    padding: "24px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: t.featureIconBg,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {feat.icon}
+                  </div>
+                  <h4
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: t.titleColor,
+                      margin: 0,
+                    }}
+                  >
+                    {feat.title}
+                  </h4>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: t.subtitleColor,
+                      lineHeight: 1.6,
+                      margin: 0,
+                    }}
+                  >
+                    {feat.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* ── Section: FAQ (Pertanyaan Umum) ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            style={{ marginTop: 24 }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: isDark ? "#60a5fa" : "#3b82f6",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  background: isDark
+                    ? "rgba(96, 165, 250, 0.1)"
+                    : "rgba(59, 130, 246, 0.1)",
+                  padding: "4px 12px",
+                  borderRadius: 20,
+                  display: "inline-block",
+                  marginBottom: 12,
+                }}
+              >
+                Pertanyaan Umum
+              </span>
+              <h3
+                style={{
+                  fontSize: "clamp(22px, 3.5vw, 30px)",
+                  fontWeight: 700,
+                  color: t.titleColor,
+                  margin: "0 0 10px",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Sering Ditanyakan (FAQ)
+              </h3>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: t.subtitleColor,
+                  margin: 0,
+                  maxWidth: 500,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  lineHeight: 1.6,
+                }}
+              >
+                Informasi seputar penggunaan fitur dan layanan di KlesiChat.
+              </p>
+            </div>
+
+            <div
+              style={{
+                maxWidth: 760,
+                margin: "0 auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                width: "100%",
+              }}
+            >
+              {[
+                {
+                  q: "Apakah KlesiChat bisa digunakan secara gratis?",
+                  a: "Ya! KlesiChat 100% gratis digunakan untuk obrolan di ruang publik maupun direct message (DM) pribadi.",
+                },
+                {
+                  q: "Bagaimana cara merekam dan mengirim Voice Note?",
+                  a: "Klik tombol mikrofon di samping input chat, izinkan browser mengakses mikrofon perangkat Anda, lalu bicaralah dan klik tombol kirim.",
+                },
+                {
+                  q: "Apakah pesan masuk langsung tampil tanpa reload?",
+                  a: "Tentu! KlesiChat menggunakan koneksi Supabase Realtime sehingga pesan baru otomatis muncul seketika di layar Anda.",
+                },
+                {
+                  q: "Bagaimana cara mengubah profil dan tema tampilan?",
+                  a: "Anda dapat mengganti tema Gelap/Terang melalui tombol ikon di pojok kanan atas, serta mengubah nama profil & foto avatar di halaman Profil.",
+                },
+              ].map((faq, idx) => {
+                const isOpen = openFaq === idx;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    style={{
+                      background: t.cardBg,
+                      border: `1px solid ${isOpen ? (isDark ? "#4a4a58" : "#cfcfe0") : t.cardBorder}`,
+                      borderRadius: 14,
+                      padding: "16px 20px",
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 14,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: t.titleColor,
+                        }}
+                      >
+                        {faq.q}
+                      </span>
+                      <motion.div
+                        animate={{ rotate: isOpen ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ChevronDown size={16} color={t.subtitleColor} />
+                      </motion.div>
+                    </div>
+
+                    <AnimatePresence>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                          animate={{ opacity: 1, height: "auto", marginTop: 10 }}
+                          exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                          transition={{ duration: 0.25, ease: "easeInOut" }}
+                          style={{ overflow: "hidden" }}
+                        >
+                          <p
+                            style={{
+                              fontSize: 12,
+                              color: t.subtitleColor,
+                              lineHeight: 1.65,
+                              margin: 0,
+                              borderTop: `1px solid ${t.cardBorder}`,
+                              paddingTop: 10,
+                            }}
+                          >
+                            {faq.a}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* ── Section: Call To Action (CTA Card) ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            style={{
+              marginTop: 32,
+              marginBottom: 20,
+              background: isDark
+                ? "linear-gradient(135deg, rgba(40,40,52,0.95) 0%, rgba(30,30,40,0.95) 100%)"
+                : "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(240,240,248,0.95) 100%)",
+              border: `1px solid ${t.cardBorder}`,
+              borderRadius: 22,
+              padding: "44px 32px",
+              textAlign: "center",
+              position: "relative",
+              overflow: "hidden",
+              boxShadow: t.cardShadow,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "-40%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 300,
+                height: 200,
+                background: t.glowColor,
+                filter: "blur(60px)",
+                pointerEvents: "none",
+              }}
+            />
+            <div style={{ position: "relative", zIndex: 1, maxWidth: 540, margin: "0 auto" }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  background: t.logoBg,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 16px",
+                  border: `1px solid ${t.logoBorder}`,
+                }}
+              >
+                <img
+                  src={LOGO_SRC}
+                  alt="KlesiChat"
+                  style={{ width: "70%", height: "70%", objectFit: "contain" }}
+                />
+              </div>
+
+              <h3
+                style={{
+                  fontSize: "clamp(24px, 4vw, 32px)",
+                  fontWeight: 800,
+                  color: t.titleColor,
+                  margin: "0 0 12px",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Siap Mulai Mengobrol?
+              </h3>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: t.subtitleColor,
+                  lineHeight: 1.6,
+                  margin: "0 0 28px",
+                }}
+              >
+                Gabung sekarang di KlesiChat dan rasakan pengalaman chatting publik & direct message yang seru dan instan.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                {isAuthenticated ? (
+                  <Link to="/chat" style={{ textDecoration: "none" }}>
+                    <motion.button
+                      whileHover={{ y: -2, scale: 1.02 }}
+                      whileTap={{ y: 0, scale: 0.98 }}
+                      style={{
+                        padding: "13px 32px",
+                        borderRadius: 12,
+                        border: "none",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        fontFamily: "'Inter', sans-serif",
+                        cursor: "pointer",
+                        background: t.btnBg,
+                        color: t.btnColor,
+                        boxShadow: t.btnShadow,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      Buka Chat
+                      <ArrowRight size={16} />
+                    </motion.button>
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/register" style={{ textDecoration: "none" }}>
+                      <motion.button
+                        whileHover={{ y: -2, scale: 1.02 }}
+                        whileTap={{ y: 0, scale: 0.98 }}
+                        style={{
+                          padding: "13px 28px",
+                          borderRadius: 12,
+                          border: "none",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          fontFamily: "'Inter', sans-serif",
+                          cursor: "pointer",
+                          background: t.btnBg,
+                          color: t.btnColor,
+                          boxShadow: t.btnShadow,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        Mulai Chatting
+                        <ArrowRight size={16} />
+                      </motion.button>
+                    </Link>
+                    <Link to="/login" style={{ textDecoration: "none" }}>
+                      <motion.button
+                        whileHover={{ y: -2, scale: 1.02 }}
+                        whileTap={{ y: 0, scale: 0.98 }}
+                        style={{
+                          padding: "13px 28px",
+                          borderRadius: 12,
+                          fontSize: 14,
+                          fontWeight: 500,
+                          fontFamily: "'Inter', sans-serif",
+                          cursor: "pointer",
+                          background: "transparent",
+                          color: t.titleColor,
+                          border: `1.5px solid ${t.cardBorder}`,
+                        }}
+                      >
+                        Sudah Punya Akun
+                      </motion.button>
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
         </div>
