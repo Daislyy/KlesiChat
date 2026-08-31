@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle, Image as ImageIcon, Paperclip } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Mic, Send, X, StopCircle, Image as ImageIcon, Paperclip, Phone, PhoneCall } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { getChatTheme } from "../lib/chatTheme";
@@ -9,6 +9,7 @@ import Avatar from "../components/chat/Avatar";
 import VoiceMessagePlayer from "../components/chat/VoiceMessagePlayer";
 import MediaModal from "../components/chat/MediaModal";
 import FileAttachment, { formatFileSize } from "../components/chat/FileAttachment";
+import { useCall } from "../context/CallContext";
 
 export default function DMPage() {
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -51,6 +52,8 @@ export default function DMPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentUserRef = useRef<CurrentUser | null>(null);
   const t = getChatTheme(isDark);
+
+  const { callStatus, startCall } = useCall();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -604,6 +607,29 @@ export default function DMPage() {
             Pesan Pribadi
           </p>
         </div>
+        {/* Voice Call Button */}
+        {callStatus === "idle" && (
+          <motion.button
+            onClick={() => startCall(otherUser)}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              border: `1px solid ${t.toggleBorder}`,
+              background: isDark ? "rgba(34,197,94,0.1)" : "rgba(34,197,94,0.08)",
+              cursor: "pointer",
+              color: "#22c55e",
+            }}
+            title="Mulai panggilan suara"
+          >
+            <Phone size={15} />
+          </motion.button>
+        )}
         <motion.button
           onClick={() => setIsDark(!isDark)}
           whileHover={{ scale: 1.1 }}
@@ -719,7 +745,12 @@ export default function DMPage() {
                   wordBreak: "break-word",
                 }}
               >
-                {msg.type === "audio" && msg.audio_url ? (
+                {msg.type === "call_log" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 2px" }}>
+                    <PhoneCall size={14} color={isDark ? "#a78bfa" : "#7c3aed"} />
+                    <span style={{ fontSize: 13, opacity: 0.8 }}>{msg.content}</span>
+                  </div>
+                ) : msg.type === "audio" && msg.audio_url ? (
                   <VoiceMessagePlayer
                     url={msg.audio_url}
                     duration={msg.audio_duration}
@@ -1228,6 +1259,7 @@ export default function DMPage() {
         imageUrl={selectedMediaModal}
         onClose={() => setSelectedMediaModal(null)}
       />
+
     </motion.div>
   );
 }

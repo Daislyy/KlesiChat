@@ -15,9 +15,6 @@ import {
   Sparkles,
   Smartphone,
   ChevronDown,
-  ShieldCheck,
-  HelpCircle,
-  Layers,
   Radio,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

@@ -8,6 +8,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import DMPage from "./pages/dm";
 import Landing from "./pages/landing";
 import { AnimatePresence } from "framer-motion";
+import { CallProvider } from "./context/CallContext";
+import IncomingCallOverlay from "./components/chat/IncomingCallOverlay";
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -54,7 +56,10 @@ function AnimatedRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AnimatedRoutes />
+      <CallProvider>
+        <AnimatedRoutes />
+        <IncomingCallOverlay />
+      </CallProvider>
     </BrowserRouter>
   );
 }
