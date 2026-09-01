@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Hash, MessageCircle } from "lucide-react";
+import { X, Hash, MessageCircle, Search } from "lucide-react";
 import type { OnlineUser, TypingUser, CurrentUser } from "../../types/chat";
 import type { ChatTheme } from "../../lib/chatTheme";
 import { supabase } from "../../lib/supabase";
@@ -29,6 +29,7 @@ export default function Sidebar({
   t,
 }: SidebarProps) {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch unread counts per sender
   const fetchUnread = async () => {
@@ -192,6 +193,65 @@ export default function Sidebar({
 
         {/* All users */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 12px 8px" }}>
+          {/* User Search Input */}
+          <div
+            style={{
+              position: "relative",
+              marginBottom: 12,
+            }}
+          >
+            <Search
+              size={13}
+              color={isDark ? "#9ca3af" : "#6b7280"}
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                pointerEvents: "none",
+              }}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari pengguna..."
+              style={{
+                width: "100%",
+                padding: "6px 10px 6px 30px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontFamily: "'DM Sans', sans-serif",
+                background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                border: `1px solid ${t.sidebarBorder}`,
+                color: isDark ? "#e2e8f0" : "#111827",
+                outline: "none",
+                transition: "all 0.2s ease",
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  color: isDark ? "#9ca3af" : "#6b7280",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
           <div
             style={{
               display: "flex",
@@ -219,11 +279,15 @@ export default function Sidebar({
                 textTransform: "uppercase",
               }}
             >
-              Member — {allUsers.length}
+              Member — {allUsers.filter((u) => u.username.toLowerCase().includes(searchQuery.toLowerCase().trim())).length}
             </span>
           </div>
 
-          {allUsers.map((ou) => {
+          {allUsers
+            .filter((ou) =>
+              ou.username.toLowerCase().includes(searchQuery.toLowerCase().trim())
+            )
+            .map((ou) => {
             const isOnline = onlineUsers.some(
               (u) => u.username === ou.username,
             );
