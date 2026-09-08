@@ -81,6 +81,184 @@ export default function Sidebar({
     };
   }, [currentUser.id]);
 
+  const onlineSet = new Set(onlineUsers.map((u) => u.username));
+  if (currentUser?.username) {
+    onlineSet.add(currentUser.username);
+  }
+
+  const query = searchQuery.toLowerCase().trim();
+  const filteredUsers = allUsers.filter((ou) =>
+    ou.username.toLowerCase().includes(query)
+  );
+
+  const onlineList = filteredUsers
+    .filter((ou) => onlineSet.has(ou.username))
+    .sort((a, b) => {
+      if (a.username === currentUser.username) return -1;
+      if (b.username === currentUser.username) return 1;
+      return a.username.localeCompare(b.username);
+    });
+
+  const offlineList = filteredUsers
+    .filter((ou) => !onlineSet.has(ou.username))
+    .sort((a, b) => a.username.localeCompare(b.username));
+
+  const totalOnlineCount = allUsers.filter((u) => onlineSet.has(u.username)).length;
+
+  const renderUserRow = (ou: (OnlineUser & { id: string }), isOnline: boolean) => {
+    const isTyping = typingUsers.some((tv) => tv.username === ou.username);
+    const isMe = ou.username === currentUser.username;
+    const unread = unreadCounts[ou.id] || 0;
+
+    return (
+      <div
+        key={ou.id || ou.username}
+        className="sidebar-user"
+        style={{ marginBottom: 6, justifyContent: "space-between" }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <Avatar
+              username={ou.username}
+              avatar_url={ou.avatar_url}
+              size={32}
+              isDark={isDark}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 9,
+                height: 9,
+                borderRadius: "50%",
+                background: isOnline
+                  ? t.onlineDot
+                  : isDark
+                    ? "#374151"
+                    : "#9ca3af",
+                border: `2px solid ${t.onlineDotBorder}`,
+              }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: unread > 0 ? 700 : 500,
+                color: t.usernameText,
+                margin: 0,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {ou.username}
+              {isMe && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    fontSize: 11,
+                    color: t.subText,
+                    fontWeight: 400,
+                  }}
+                >
+                  (kamu)
+                </span>
+              )}
+            </p>
+            <p
+              style={{
+                fontSize: 11,
+                color: isTyping
+                  ? t.typingText
+                  : isOnline
+                    ? t.subText
+                    : isDark
+                      ? "#6b7280"
+                      : "#9ca3af",
+                margin: 0,
+              }}
+            >
+              {isTyping
+                ? "✦ mengetik..."
+                : isOnline
+                  ? "online"
+                  : "offline"}
+            </p>
+          </div>
+        </div>
+
+        {!isMe && (
+          <a
+            href={`/dm?user=${ou.id}`}
+            style={{
+              flexShrink: 0,
+              position: "relative",
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textDecoration: "none",
+              background:
+                unread > 0
+                  ? isDark
+                    ? "#3b1fa8"
+                    : "#ede9fe"
+                  : isDark
+                    ? "#1e1e2e"
+                    : "#f3f4f6",
+              border: `1px solid ${unread > 0 ? "#7c3aed" : t.headerBorder}`,
+            }}
+            title={`Chat dengan ${ou.username}`}
+          >
+            <MessageCircle
+              size={14}
+              color={
+                unread > 0 ? "#7c3aed" : isDark ? "#e2e8f0" : "#111827"
+              }
+            />
+            {unread > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 10,
+                  background: "#ef4444",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: "'DM Mono', monospace",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `1.5px solid ${isDark ? "#0a0a0f" : "#fff"}`,
+                  lineHeight: 1,
+                }}
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </a>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       {isOpen && (
@@ -252,24 +430,17 @@ export default function Sidebar({
             )}
           </div>
 
+          {/* Member & Live Online Count Header */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              justifyContent: "space-between",
               marginBottom: 12,
               paddingLeft: 4,
+              paddingRight: 4,
             }}
           >
-            <div
-              className="online-pulse"
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: t.onlineDot,
-              }}
-            />
             <span
               style={{
                 fontSize: 10,
@@ -279,172 +450,126 @@ export default function Sidebar({
                 textTransform: "uppercase",
               }}
             >
-              Member — {allUsers.filter((u) => u.username.toLowerCase().includes(searchQuery.toLowerCase().trim())).length}
+              Member — {filteredUsers.length}
             </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "2px 8px",
+                borderRadius: 12,
+                background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.1)",
+                border: "1px solid rgba(34,197,94,0.25)",
+              }}
+            >
+              <div
+                className="online-pulse"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#22c55e",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#22c55e",
+                  fontFamily: "'DM Mono', monospace",
+                }}
+              >
+                {totalOnlineCount} Online
+              </span>
+            </div>
           </div>
 
-          {allUsers
-            .filter((ou) =>
-              ou.username.toLowerCase().includes(searchQuery.toLowerCase().trim())
-            )
-            .map((ou) => {
-            const isOnline = onlineUsers.some(
-              (u) => u.username === ou.username,
-            );
-            const isTyping = typingUsers.some(
-              (tv) => tv.username === ou.username,
-            );
-            const isMe = ou.username === currentUser.username;
-            const unread = unreadCounts[ou.id] || 0;
-
-            return (
+          {/* Online Users List (Always on Top) */}
+          {onlineList.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
               <div
-                key={ou.username}
-                className="sidebar-user"
-                style={{ marginBottom: 6, justifyContent: "space-between" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                  paddingLeft: 4,
+                }}
               >
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flex: 1,
-                    minWidth: 0,
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: t.onlineDot,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: t.sectionLabel,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <Avatar
-                      username={ou.username}
-                      avatar_url={ou.avatar_url}
-                      size={32}
-                      isDark={isDark}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: 0,
-                        right: 0,
-                        width: 9,
-                        height: 9,
-                        borderRadius: "50%",
-                        background: isOnline
-                          ? t.onlineDot
-                          : isDark
-                            ? "#374151"
-                            : "#9ca3af",
-                        border: `2px solid ${t.onlineDotBorder}`,
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: unread > 0 ? 700 : 500,
-                        color: t.usernameText,
-                        margin: 0,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {ou.username}
-                      {isMe && (
-                        <span
-                          style={{
-                            marginLeft: 6,
-                            fontSize: 11,
-                            color: t.subText,
-                            fontWeight: 400,
-                          }}
-                        >
-                          (kamu)
-                        </span>
-                      )}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: isTyping
-                          ? t.typingText
-                          : isOnline
-                            ? t.subText
-                            : isDark
-                              ? "#6b7280"
-                              : "#9ca3af",
-                        margin: 0,
-                      }}
-                    >
-                      {isTyping
-                        ? "✦ mengetik..."
-                        : isOnline
-                          ? "online"
-                          : "offline"}
-                    </p>
-                  </div>
-                </div>
-
-                {!isMe && (
-                  <a
-                    href={`/dm?user=${ou.id}`}
-                    style={{
-                      flexShrink: 0,
-                      position: "relative",
-                      width: 28,
-                      height: 28,
-                      borderRadius: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textDecoration: "none",
-                      background:
-                        unread > 0
-                          ? isDark
-                            ? "#3b1fa8"
-                            : "#ede9fe"
-                          : isDark
-                            ? "#1e1e2e"
-                            : "#f3f4f6",
-                      border: `1px solid ${unread > 0 ? "#7c3aed" : t.headerBorder}`,
-                    }}
-                    title={`Chat dengan ${ou.username}`}
-                  >
-                    <MessageCircle
-                      size={14}
-                      color={
-                        unread > 0 ? "#7c3aed" : isDark ? "#e2e8f0" : "#111827"
-                      }
-                    />
-                    {unread > 0 && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: -6,
-                          right: -6,
-                          minWidth: 16,
-                          height: 16,
-                          padding: "0 4px",
-                          borderRadius: 10,
-                          background: "#ef4444",
-                          color: "#fff",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          fontFamily: "'DM Mono', monospace",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: `1.5px solid ${isDark ? "#0a0a0f" : "#fff"}`,
-                          lineHeight: 1,
-                        }}
-                      >
-                        {unread > 99 ? "99+" : unread}
-                      </span>
-                    )}
-                  </a>
-                )}
+                  Online — {onlineList.length}
+                </span>
               </div>
-            );
-          })}
+              {onlineList.map((ou) => renderUserRow(ou, true))}
+            </div>
+          )}
+
+          {/* Offline Users List */}
+          {offlineList.length > 0 && (
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                  paddingLeft: 4,
+                  marginTop: onlineList.length > 0 ? 8 : 0,
+                }}
+              >
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: isDark ? "#4b5563" : "#9ca3af",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: isDark ? "#6b7280" : "#9ca3af",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Offline — {offlineList.length}
+                </span>
+              </div>
+              {offlineList.map((ou) => renderUserRow(ou, false))}
+            </div>
+          )}
+
+          {filteredUsers.length === 0 && (
+            <p
+              style={{
+                fontSize: 12,
+                color: t.subText,
+                textAlign: "center",
+                margin: "24px 0",
+              }}
+            >
+              Tidak ada pengguna ditemukan.
+            </p>
+          )}
         </div>
 
         {/* Footer */}

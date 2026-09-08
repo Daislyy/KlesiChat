@@ -14,7 +14,6 @@ export default function IncomingCallOverlay() {
     callDuration,
     activeOtherUser,
     incomingCaller,
-    remoteAudioRef,
     acceptCall,
     rejectCall,
     endCall,
@@ -61,8 +60,6 @@ export default function IncomingCallOverlay() {
           padding: 16,
         }}
       >
-        <audio ref={remoteAudioRef} autoPlay playsInline />
-
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

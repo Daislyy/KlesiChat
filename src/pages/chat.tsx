@@ -20,14 +20,16 @@ import TypingIndicator from "../components/chat/TypingIndicator";
 import InputArea from "../components/chat/InputArea";
 import MediaModal from "../components/chat/MediaModal";
 
+import { useCall } from "../context/CallContext";
+
 const SCROLL_THRESHOLD = 120;
 
 export default function ChatPage() {
+  const { onlineUsers } = useCall();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [allUsers, setAllUsers] = useState<(OnlineUser & { id: string })[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -184,6 +186,7 @@ export default function ChatPage() {
   useEffect(() => {
     let msgChannel: ReturnType<typeof supabase.channel>;
     let typingChannel: ReturnType<typeof supabase.channel>;
+    let profilesChannel: ReturnType<typeof supabase.channel>;
     let autoRefreshInterval: ReturnType<typeof setInterval>;
 
     const init = async () => {
@@ -207,17 +210,33 @@ export default function ChatPage() {
       };
       setCurrentUser(me);
 
-      const { data: allProfiles } = await supabase
-        .from("profiles")
-        .select("id,username,avatar_url");
-      if (allProfiles)
-        setAllUsers(
-          allProfiles.map((p: any) => ({
-            id: p.id,
-            username: p.username || "unknown",
-            avatar_url: p.avatar_url || "",
-          })),
-        );
+      const fetchAllProfiles = async () => {
+        const { data: allProfiles } = await supabase
+          .from("profiles")
+          .select("id,username,avatar_url");
+        if (allProfiles) {
+          setAllUsers(
+            allProfiles.map((p: any) => ({
+              id: p.id,
+              username: p.username || "unknown",
+              avatar_url: p.avatar_url || "",
+            })),
+          );
+        }
+      };
+      await fetchAllProfiles();
+
+      // Realtime profiles change listener
+      profilesChannel = supabase
+        .channel("public:profiles")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "profiles" },
+          () => {
+            fetchAllProfiles();
+          },
+        )
+        .subscribe();
 
       await fetchMessages();
       setTimeout(() => {
@@ -293,15 +312,9 @@ export default function ChatPage() {
         config: { presence: { key: user.id } },
       });
       typingChannelRef.current = typingChannel;
-      const syncPresenceState = () => {
+      const syncTypingState = () => {
         const state = typingChannel.presenceState();
         const all = Object.values(state).flat() as any[];
-        setOnlineUsers(
-          all.map((u) => ({
-            username: u.username,
-            avatar_url: u.avatar_url || "",
-          })),
-        );
         setTypingUsers(
           all
             .filter((u) => u.isTyping && u.username !== me.username)
@@ -313,9 +326,9 @@ export default function ChatPage() {
         );
       };
       typingChannel
-        .on("presence", { event: "sync" }, syncPresenceState)
-        .on("presence", { event: "join" }, syncPresenceState)
-        .on("presence", { event: "leave" }, syncPresenceState)
+        .on("presence", { event: "sync" }, syncTypingState)
+        .on("presence", { event: "join" }, syncTypingState)
+        .on("presence", { event: "leave" }, syncTypingState)
         .subscribe(async (status) => {
           if (status === "SUBSCRIBED")
             await typingChannel.track({
@@ -330,6 +343,7 @@ export default function ChatPage() {
     return () => {
       if (msgChannel) supabase.removeChannel(msgChannel);
       if (typingChannel) supabase.removeChannel(typingChannel);
+      if (profilesChannel) supabase.removeChannel(profilesChannel);
       typingChannelRef.current = null;
       if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     };
